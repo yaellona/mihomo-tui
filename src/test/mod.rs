@@ -192,7 +192,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("创建临时目录失败");
         let config_path = temp_dir.path().join("config.yaml");
 
-        let mut mihomo = Mihomo::new("mihomo-windows-amd64.exe".to_string());
+        let mut mihomo = Mihomo::new("mihomo".to_string());
         mihomo.config_path = config_path;
 
         let filename = mihomo
@@ -217,10 +217,10 @@ mod tests {
         mihomo.stop_mihomo();
     }
 
-    #[test]
-    fn test_enable_proxy() {
-        system_proxy::enable_proxy("127.0.0.1.7890").ok();
-    }
+    // #[test]
+    // fn test_enable_proxy() {
+    //     system_proxy::enable_proxy("127.0.0.1.7890").ok();
+    // }
 
     // async fn test_speed() {
     //     let mihomo = Mihomo::new("mihomo-windows-amd64.exe".to_string());

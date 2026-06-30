@@ -12,6 +12,8 @@ reqwest = { version = "0.13.4", features = ["json"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
 tokio = { version = "1.52.3", features = ["full"] }
+
+[target.'cfg(windows)'.dependencies]
 winreg = "0.56.0"
 
 [dev-dependencies]
