@@ -14,6 +14,7 @@ pub enum PopupMode {
 #[derive(Debug)]
 pub struct App {
     pub select_node: usize,
+    pub select_provider: usize,
     pub proxy_running: bool,
     pub active_node: Option<usize>,
     pub mihomo: Mihomo,
@@ -26,6 +27,7 @@ impl App {
     pub fn new() -> Self {
         Self {
             select_node: 0,
+            select_provider: 0,
             proxy_running: get_proxy_status().map_or(false, |(v, _)| v == 1),
             active_node: None,
             mihomo: Mihomo::new("mihomo-windows-amd64.exe".to_string()),
@@ -90,11 +92,14 @@ impl App {
                         let url = self.url_input.clone();
                         self.popup_mode = PopupMode::None;
                         self.url_input.clear();
-                        
-                        self.logs.add_log(LogType::Info, "正在验证URL...".to_string());
-                        
+
+                        self.logs
+                            .add_log(LogType::Info, "正在验证URL...".to_string());
+
                         match self.mihomo.validate_and_insert_sub(url).await {
-                            Ok(_) => self.logs.add_log(LogType::Info, "代理商URL验证成功，已添加".to_string()),
+                            Ok(_) => self
+                                .logs
+                                .add_log(LogType::Info, "代理商URL验证成功，已添加".to_string()),
                             Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
                         }
                     }
@@ -108,6 +113,52 @@ impl App {
                 }
                 return;
             }
+            PopupMode::AgencySelect => {
+                match key {
+                    KeyCode::Esc => {
+                        self.popup_mode = PopupMode::None;
+                    }
+
+                    KeyCode::Up => {
+                        let len = self
+                            .mihomo
+                            .config
+                            .proxy_providers
+                            .as_ref() // Option<&HashMap<...>>
+                            .map(|p| p.len()) // Some(len) 或 None
+                            .unwrap_or(0); // 获取长度或默认 0
+                        if len > 0 {
+                            self.select_provider = if self.select_provider > 0 {
+                                self.select_provider - 1
+                            } else {
+                                len - 1
+                            };
+                        }
+                    }
+                    KeyCode::Down => {
+                        let len = self
+                            .mihomo
+                            .config
+                            .proxy_providers
+                            .as_ref() // Option<&HashMap<...>>
+                            .map(|p| p.len()) // Some(len) 或 None
+                            .unwrap_or(0); // 获取长度或默认 0
+                        if len > 0 {
+                            self.select_provider = (self.select_provider + 1) % len;
+                        }
+                    }
+                    KeyCode::Enter => match self.mihomo.switch_provider(self.select_provider) {
+                        Ok(_) => {
+                            self.update_node().await;
+                            self.popup_mode = PopupMode::None;
+                            self.logs.add_log(LogType::Info, "切换代理商".to_string())
+                        }
+                        Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+                    },
+                    _ => {}
+                }
+                return;
+            }
             _ => {}
         }
 
@@ -115,19 +166,12 @@ impl App {
             KeyCode::Char('q') => {
                 self.should_quit = true;
             }
-            // KeyCode::Char('u') => {
-            //     self.popup = PopupMode::UrlInput;
-            //     self.url_input.clear();
-            // }
-            // KeyCode::Char('c') => {
-            //     if !self.agencies.is_empty() {
-            //         self.popup = PopupMode::AgencySelect;
-            //         self.selected_agency = 0;
-            //     }
-            // }
+
             KeyCode::Char('p') => {
                 self.toggle_system_proxy();
             }
+            KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
+
             KeyCode::Char('t') => {
                 self.test_delay().await;
             }

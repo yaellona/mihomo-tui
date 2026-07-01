@@ -63,42 +63,47 @@ pub fn render_url_input(f: &mut Frame, app: &App) {
     f.render_widget(input, input_layout[0]);
 }
 
-// pub fn render_agency_select(f: &mut Frame, app: &App) {
-//     let area = centered_rect(50, 40, f.area());
+pub fn render_provider_select(f: &mut Frame, app: &App) {
+    let area = centered_rect(50, 40, f.area());
 
-//     // 清除背景
-//     f.render_widget(Clear, area);
+    // 清除背景
+    f.render_widget(Clear, area);
 
-//     let block = Block::default()
-//         .title("选择代理商 (Enter 确认, Esc 取消)")
-//         .borders(Borders::ALL)
-//         .style(Style::default().fg(Color::White));
+    let block = Block::default()
+        .title("选择代理商 (Enter 确认, Esc 取消)")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White));
 
-//     let inner = block.inner(area);
-//     f.render_widget(block, area);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
 
-//     // 构建代理商列表
-//     let items: Vec<String> = app
-//         .agencies
-//         .iter()
-//         .enumerate()
-//         .map(|(i, agency)| {
-//             let provider = &agency.provider;
-//             let node_count = agency.nodes.len();
-//             let marker = if i == app.selected_agency {
-//                 ">> "
-//             } else {
-//                 "   "
-//             };
-//             format!("{}{} ({} 个节点)", marker, provider, node_count)
-//         })
-//         .collect();
+    // 构建代理商列表
+    let items: Vec<String> = app
+        .mihomo
+        .config
+        .proxy_providers
+        .as_ref()
+        .map(|providers| {
+            providers
+                .keys() // 获取所有 key
+                .enumerate()
+                .map(|(i, key)| {
+                    let marker = if i == app.select_provider {
+                        ">> "
+                    } else {
+                        "   "
+                    };
+                    format!("{}{}", marker, key)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
-//     let list_text = items.join("\n");
+    let list_text = items.join("\n");
 
-//     let style = Style::default().fg(Color::White);
+    let style = Style::default().fg(Color::White);
 
-//     let list = Paragraph::new(list_text).style(style);
+    let list = Paragraph::new(list_text).style(style);
 
-//     f.render_widget(list, inner);
-// }
+    f.render_widget(list, inner);
+}

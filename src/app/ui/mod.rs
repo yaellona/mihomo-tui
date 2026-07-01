@@ -62,6 +62,9 @@ impl App {
             PopupMode::UrlInput => {
                 popup::render_url_input(f, self);
             }
+            PopupMode::AgencySelect => {
+                popup::render_provider_select(f, self);
+            }
             _ => {}
         }
     }

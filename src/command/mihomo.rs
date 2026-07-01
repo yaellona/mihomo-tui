@@ -93,8 +93,6 @@ impl Mihomo {
         let sub_name = self.config.insert_sub(url.clone(), &self.config_path)?;
         self.start_mihomo()?;
 
-        // sleep(Duration::from_secs(3)).await;
-
         let client = reqwest::Client::builder()
             .no_proxy()
             .timeout(Duration::from_secs(5))
@@ -118,7 +116,7 @@ impl Mihomo {
             ));
         }
 
-        let body = response
+        let body: String = response
             .text()
             .await
             .map_err(|e| format!("读取provider响应失败: {}", e))?;
@@ -154,11 +152,43 @@ impl Mihomo {
         }
         Ok(())
     }
+
     pub async fn switch_node(&mut self, node_name: &str) -> Result<(), reqwest::Error> {
         let client = reqwest::Client::builder().no_proxy().build()?;
         let url = "http://127.0.0.1:9090/proxies/Proxy";
         let body = serde_json::json!({"name": node_name});
         client.put(url).json(&body).send().await?;
+        Ok(())
+    }
+
+    pub fn get_provider_key_by_index(&self, index: usize) -> Option<String> {
+        self.config.proxy_providers.as_ref().and_then(|providers| {
+            let keys: Vec<&String> = providers.keys().collect();
+            keys.get(index).map(|k| k.to_string())
+        })
+    }
+
+    pub fn switch_provider(&mut self, provider_index: usize) -> Result<(), String> {
+        let provider_name = self.get_provider_key_by_index(provider_index).unwrap();
+        // 检查 provider 是否存在
+        let exists = self
+            .config
+            .proxy_providers
+            .as_ref()
+            .map(|providers| providers.contains_key(&provider_name))
+            .unwrap_or(false);
+
+        if !exists {
+            return Err(format!("代理商 '{}' 不存在", provider_name));
+        }
+
+        // 设置 use_list 为选中的 provider 名称
+        if let Some(group) = self.config.proxy_groups.first_mut() {
+            group.use_list = vec![provider_name];
+        }
+        self.write_config()?;
+        self.stop_mihomo()?;
+        self.start_mihomo()?;
         Ok(())
     }
 }
