@@ -4,9 +4,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use tokio::time::{Duration, sleep};
 
 use crate::config::mihomo_config::MihomoConfig;
-use crate::config::node::{MihomoNodeReport, Node};
+use crate::config::node::{MihomoNodeReport, Node, ProviderReport};
 #[derive(Debug)]
 pub struct Mihomo {
     child: Option<Child>,
@@ -84,6 +85,62 @@ impl Mihomo {
         self.stop_mihomo()?;
         let sub_name = self.config.insert_sub(url, &self.config_path)?;
         self.start_mihomo()?;
+        Ok(sub_name)
+    }
+
+    pub async fn validate_and_insert_sub(&mut self, url: String) -> Result<String, String> {
+        self.stop_mihomo()?;
+        let sub_name = self.config.insert_sub(url.clone(), &self.config_path)?;
+        self.start_mihomo()?;
+
+        // sleep(Duration::from_secs(3)).await;
+
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
+
+        let provider_url = format!("http://127.0.0.1:9090/providers/proxies/{}", sub_name);
+        let response = client
+            .get(&provider_url)
+            .send()
+            .await
+            .map_err(|e| format!("请求provider API失败: {}", e))?;
+
+        if !response.status().is_success() {
+            self.stop_mihomo()?;
+            self.config.remove_sub(&sub_name, &self.config_path)?;
+            self.start_mihomo()?;
+            return Err(format!(
+                "URL验证失败：provider API返回状态码 {}",
+                response.status()
+            ));
+        }
+
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("读取provider响应失败: {}", e))?;
+
+        let provider_report: ProviderReport =
+            serde_json::from_str(&body).map_err(|e| format!("解析provider响应失败: {}", e))?;
+
+        let proxy_count = provider_report
+            .proxies
+            .as_ref()
+            .map(|p| p.len())
+            .unwrap_or(0);
+
+        if proxy_count == 0 {
+            self.stop_mihomo()?;
+            self.config.remove_sub(&sub_name, &self.config_path)?;
+            self.start_mihomo()?;
+            return Err("URL验证失败：无法从该URL加载任何代理节点".to_string());
+        }
+
+        let _ = self.update_node().await;
+
         Ok(sub_name)
     }
     pub async fn update_node(&mut self) -> Result<(), reqwest::Error> {

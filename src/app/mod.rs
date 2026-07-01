@@ -90,8 +90,11 @@ impl App {
                         let url = self.url_input.clone();
                         self.popup_mode = PopupMode::None;
                         self.url_input.clear();
-                        match self.mihomo.insert_sub(url) {
-                            Ok(_) => self.logs.add_log(LogType::Info, "插入代理商".to_string()),
+                        
+                        self.logs.add_log(LogType::Info, "正在验证URL...".to_string());
+                        
+                        match self.mihomo.validate_and_insert_sub(url).await {
+                            Ok(_) => self.logs.add_log(LogType::Info, "代理商URL验证成功，已添加".to_string()),
                             Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
                         }
                     }
