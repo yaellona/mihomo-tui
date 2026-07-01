@@ -6,23 +6,27 @@ use std::path::PathBuf;
 use std::process::{Child, Command};
 
 use crate::config::mihomo_config::MihomoConfig;
-
+use crate::config::node::{MihomoNodeReport, Node};
 pub struct Mihomo {
     child: Option<Child>,
     pub mihomo_path: String,
     pub config_path: PathBuf,
     pub config: MihomoConfig,
+    pub current_node: Vec<Node>,
 }
 
 impl Mihomo {
     pub fn new(mihomo_path: String) -> Self {
-        let config_dir = config_dir().ok_or("无法获取配置目录").unwrap();
+        let config_dir = config_dir()
+            .ok_or("无法获取配置目录")
+            .unwrap()
+            .join("mihomors");
         if !config_dir.exists() {
             fs::create_dir_all(&config_dir)
                 .map_err(|e| format!("创建目录失败: {}", e))
                 .ok();
         }
-        let path = config_dir.join("mihomo_config.yaml");
+        let path = config_dir.join("config.yaml");
         let config =
             MihomoConfig::read_from_file(&path).unwrap_or_else(|_| MihomoConfig::default_config());
         Self {
@@ -30,18 +34,16 @@ impl Mihomo {
             mihomo_path: mihomo_path,
             config_path: path,
             config: config,
+            current_node: vec![],
         }
     }
 
     pub fn start_mihomo(&mut self) -> Result<(), String> {
-        self.stop_mihomo();
+        self.stop_mihomo()?;
 
-        let config_dir = self
-            .config_path
-            .parent()
-            .ok_or("无法获取配置目录")?;
+        let config_dir = self.config_path.parent().ok_or("无法获取配置目录")?;
         let child = Command::new(&self.mihomo_path)
-            .args(["-d", config_dir.to_str().ok_or("路径无效")?])
+            .args(["-d", config_dir.to_str().ok_or("config路径无效")?])
             .spawn()
             .map_err(|e| format!("启动 mihomo 失败: {}", e))?;
 
@@ -49,15 +51,44 @@ impl Mihomo {
         Ok(())
     }
 
-    pub fn stop_mihomo(&mut self) {
+    pub fn stop_mihomo(&mut self) -> Result<(), String> {
         if let Some(mut child) = self.child.take() {
-            let _ = child.kill();
-            let _ = child.wait();
+            child
+                .kill()
+                .map_err(|e| format!("停止mihomo进程失败: {}", e))?;
+            child
+                .wait()
+                .map_err(|e| format!("等待mihomo进程失败: {}", e))?;
         }
+        Ok(())
     }
-    pub async fn test_proxy_delay(&self) -> Result<String, reqwest::Error> {
+    pub async fn test_proxy_delay(&mut self) -> Result<(), reqwest::Error> {
+        let client = reqwest::Client::builder().no_proxy().build()?;
         let url = "http://127.0.0.1:9090/group/Proxy/delay?timeout=5000&url=https://www.gstatic.com/generate_204";
-        let body = reqwest::get(url).await?.text().await?;
-        Ok(body)
+        let body = client.get(url).send().await?.text().await?;
+        let delays: HashMap<String, u32> = serde_json::from_str(&body).unwrap();
+        for node in &mut self.current_node {
+            if let Some(&delay) = delays.get(&node.name) {
+                node.speed = format!("{}ms", delay);
+            }
+        }
+        Ok(())
+    }
+    pub fn write_config(&self) -> Result<(), String> {
+        self.config.write_to_path(&self.config_path)
+    }
+    pub fn insert_sub(&mut self, url: String) -> Result<String, String> {
+        self.config.insert_sub(url, &self.config_path)
+    }
+    pub async fn update_node(&mut self) -> Result<(), reqwest::Error> {
+        let client = reqwest::Client::builder().no_proxy().build()?;
+        let url = "http://127.0.0.1:9090/proxies/Proxy";
+        let body = client.get(url).send().await?.text().await?;
+        let mihomo_report: MihomoNodeReport = serde_json::from_str(&body).unwrap();
+        self.current_node.clear();
+        for node_name in mihomo_report.all {
+            self.current_node.push(Node::new(node_name));
+        }
+        Ok(())
     }
 }

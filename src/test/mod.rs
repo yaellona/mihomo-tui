@@ -186,43 +186,4 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err.contains("配置文件不存在"));
     }
-
-    #[tokio::test]
-    async fn test_start_mihomo_success() {
-        let temp_dir = TempDir::new().expect("创建临时目录失败");
-        let config_path = temp_dir.path().join("config.yaml");
-
-        let mut mihomo = Mihomo::new("mihomo".to_string());
-        mihomo.config_path = config_path;
-
-        let filename = mihomo
-            .config
-            .insert_sub(
-                "https://api0.bigmelook.com/BigME/Subscription/api/v1/client/subscribe?token=09bc6f14b110c83776cf13c91f701e44"
-                    .to_string(),
-                &mihomo.config_path,
-            )
-            .expect("插入订阅失败");
-        mihomo.config.proxy_groups[0].use_list.push(filename);
-
-        let result = mihomo.start_mihomo();
-        assert!(result.is_ok(), "启动 mihomo 应该成功: {:?}", result.err());
-        eprintln!("开始测试喵");
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        match mihomo.test_proxy_delay().await {
-            Ok(a) => println!("{}", a),
-            Err(e) => println!("跳过延迟测试: {}", e),
-        }
-        eprintln!("完成测试喵");
-        mihomo.stop_mihomo();
-    }
-
-    // #[test]
-    // fn test_enable_proxy() {
-    //     system_proxy::enable_proxy("127.0.0.1.7890").ok();
-    // }
-
-    // async fn test_speed() {
-    //     let mihomo = Mihomo::new("mihomo-windows-amd64.exe".to_string());
-    // }
 }

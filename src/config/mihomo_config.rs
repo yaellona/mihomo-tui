@@ -187,7 +187,6 @@ impl MihomoConfig {
         }
         let yaml_str = self.to_yaml()?;
         fs::write(config_path, yaml_str).map_err(|e| format!("写入文件失败: {}", e))?;
-
         Ok(())
     }
 
