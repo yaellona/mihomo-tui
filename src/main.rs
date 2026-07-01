@@ -22,12 +22,12 @@ async fn main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut app = app::App::new();
-    app.mihomo.start_mihomo();
+    app.start_mihomo();
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     app.update_node().await;
     loop {
-        terminal.draw(|f| app::ui::draw(f, &app))?;
+        terminal.draw(|f| app.draw(f))?;
 
         if let Some(key) = app::event::poll_event()? {
             app.on_key(key).await;
@@ -36,7 +36,7 @@ async fn main() -> Result<(), io::Error> {
             break;
         }
     }
-    let _ = app.mihomo.stop_mihomo();
+    app.clear();
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;

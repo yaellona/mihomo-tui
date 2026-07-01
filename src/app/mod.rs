@@ -26,13 +26,27 @@ impl App {
     }
     pub async fn update_node(&mut self) {
         match self.mihomo.update_node().await {
-            Ok(_) => {
-                self.logs.add_log(LogType::Info, "更新节点".to_string());
-            }
-            Err(e) => {
-                self.logs.add_log(LogType::Error, e.to_string());
-            }
+            Ok(_) => self.logs.add_log(LogType::Info, "更新节点".to_string()),
+            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
         };
+    }
+    pub fn clear(&mut self) {
+        match self.mihomo.stop_mihomo() {
+            Ok(_) => self.logs.add_log(LogType::Info, "关闭mihomo".to_string()),
+            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+        }
+    }
+    pub fn start_mihomo(&mut self) {
+        match self.mihomo.start_mihomo() {
+            Ok(_) => self.logs.add_log(LogType::Info, "mihomo启动".to_string()),
+            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+        }
+    }
+    pub async fn test_delay(&mut self) {
+        match self.mihomo.test_proxy_delay().await {
+            Ok(_) => self.logs.add_log(LogType::Info, "测速成功".to_string()),
+            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+        }
     }
     pub async fn on_key(&mut self, key: KeyCode) {
         match key {
@@ -52,6 +66,9 @@ impl App {
             // KeyCode::Char('p') => {
             //     self.toggle_system_proxy();
             // }
+            KeyCode::Char('t') => {
+                self.test_delay().await;
+            }
             KeyCode::Up => {
                 let len = self.mihomo.current_nodes.len();
                 if len > 0 {
@@ -69,7 +86,10 @@ impl App {
                 }
             }
             KeyCode::Enter => {
+                self.active_node = Some(self.select_node);
+                self.proxy_running = true;
                 let node_name = self.mihomo.current_nodes[self.select_node].name.clone();
+
                 match self.mihomo.switch_node(&node_name).await {
                     Ok(_) => {
                         self.logs.add_log(LogType::Info, "切换节点".to_string());

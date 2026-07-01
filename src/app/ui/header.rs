@@ -9,7 +9,8 @@ pub fn render(app: &App) -> Paragraph<'_> {
     if app.proxy_running {
         info_lines.push(format!(
             "\u{1f7e2} 代理运行中 (127.0.0.1:{}) - {}",
-            7890, &app.mihomo.current_nodes[app.select_node].name
+            7890,
+            &app.mihomo.current_nodes[app.active_node.unwrap()].name
         ));
     } else {
         info_lines.push("\u{1f534} 代理已停止".to_string());
