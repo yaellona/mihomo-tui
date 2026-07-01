@@ -3,16 +3,17 @@ use reqwest;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 
 use crate::config::mihomo_config::MihomoConfig;
 use crate::config::node::{MihomoNodeReport, Node};
+#[derive(Debug)]
 pub struct Mihomo {
     child: Option<Child>,
     pub mihomo_path: String,
     pub config_path: PathBuf,
     pub config: MihomoConfig,
-    pub current_node: Vec<Node>,
+    pub current_nodes: Vec<Node>,
 }
 
 impl Mihomo {
@@ -34,7 +35,7 @@ impl Mihomo {
             mihomo_path: mihomo_path,
             config_path: path,
             config: config,
-            current_node: vec![],
+            current_nodes: vec![],
         }
     }
 
@@ -44,6 +45,8 @@ impl Mihomo {
         let config_dir = self.config_path.parent().ok_or("无法获取配置目录")?;
         let child = Command::new(&self.mihomo_path)
             .args(["-d", config_dir.to_str().ok_or("config路径无效")?])
+            .stdout(Stdio::null()) // 隐藏 stdout
+            .stderr(Stdio::null()) // 隐藏 stderr
             .spawn()
             .map_err(|e| format!("启动 mihomo 失败: {}", e))?;
 
@@ -67,7 +70,7 @@ impl Mihomo {
         let url = "http://127.0.0.1:9090/group/Proxy/delay?timeout=5000&url=https://www.gstatic.com/generate_204";
         let body = client.get(url).send().await?.text().await?;
         let delays: HashMap<String, u32> = serde_json::from_str(&body).unwrap();
-        for node in &mut self.current_node {
+        for node in &mut self.current_nodes {
             if let Some(&delay) = delays.get(&node.name) {
                 node.speed = format!("{}ms", delay);
             }
@@ -81,14 +84,21 @@ impl Mihomo {
         self.config.insert_sub(url, &self.config_path)
     }
     pub async fn update_node(&mut self) -> Result<(), reqwest::Error> {
-        let client = reqwest::Client::builder().no_proxy().build()?;
+        let client: reqwest::Client = reqwest::Client::builder().no_proxy().build()?;
         let url = "http://127.0.0.1:9090/proxies/Proxy";
         let body = client.get(url).send().await?.text().await?;
         let mihomo_report: MihomoNodeReport = serde_json::from_str(&body).unwrap();
-        self.current_node.clear();
+        self.current_nodes.clear();
         for node_name in mihomo_report.all {
-            self.current_node.push(Node::new(node_name));
+            self.current_nodes.push(Node::new(node_name));
         }
+        Ok(())
+    }
+    pub async fn switch_node(&mut self, node_name: &str) -> Result<(), reqwest::Error> {
+        let client = reqwest::Client::builder().no_proxy().build()?;
+        let url = "http://127.0.0.1:9090/proxies/Proxy";
+        let body = serde_json::json!({"name": node_name});
+        client.put(url).json(&body).send().await?;
         Ok(())
     }
 }

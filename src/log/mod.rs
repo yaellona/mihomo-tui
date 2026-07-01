@@ -5,6 +5,17 @@ pub enum LogType {
     Error,
     Debug,
 }
+impl LogType {
+    pub fn as_str(&self) -> String {
+        match self {
+            LogType::Info => "Info".to_string(),
+            LogType::Warn => "Warn".to_string(),
+            LogType::Error => "Error".to_string(),
+            LogType::Debug => "Debug".to_string(),
+        }
+    }
+}
+#[derive(Debug)]
 pub struct Logs {
     logs: Vec<Log>,
 }
@@ -35,8 +46,8 @@ impl Logs {
 }
 #[derive(Debug, Clone)]
 pub struct Log {
-    log_type: LogType,
-    msg: String,
+    pub log_type: LogType,
+    pub msg: String,
 }
 
 impl Log {
