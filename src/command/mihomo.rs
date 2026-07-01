@@ -81,7 +81,10 @@ impl Mihomo {
         self.config.write_to_path(&self.config_path)
     }
     pub fn insert_sub(&mut self, url: String) -> Result<String, String> {
-        self.config.insert_sub(url, &self.config_path)
+        self.stop_mihomo()?;
+        let sub_name = self.config.insert_sub(url, &self.config_path)?;
+        self.start_mihomo()?;
+        Ok(sub_name)
     }
     pub async fn update_node(&mut self) -> Result<(), reqwest::Error> {
         let client: reqwest::Client = reqwest::Client::builder().no_proxy().build()?;

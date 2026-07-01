@@ -1,15 +1,14 @@
 pub mod content;
 pub mod footer;
 pub mod header;
+pub mod popup;
 pub mod sidebar;
+use crate::app::PopupMode;
 use std::io::Split;
 
 use ratatui::{
     Frame,
-    layout::{
-        Constraint::{self, Length},
-        Direction, Layout,
-    },
+    layout::{Constraint, Direction, Layout},
 };
 
 use crate::app::App;
@@ -59,14 +58,11 @@ impl App {
         );
 
         // 弹窗渲染
-        // match app.popup {
-        //     PopupMode::UrlInput => {
-        //         components::popup::render_url_input(f, app);
-        //     }
-        //     PopupMode::AgencySelect => {
-        //         components::popup::render_agency_select(f, app);
-        //     }
-        //     PopupMode::None => {}
-        // }
+        match self.popup_mode {
+            PopupMode::UrlInput => {
+                popup::render_url_input(f, self);
+            }
+            _ => {}
+        }
     }
 }

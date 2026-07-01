@@ -8,11 +8,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use std::time::Duration;
-use tokio::time::Sleep;
-
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::collections::HashMap;
 use std::io;
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
@@ -23,9 +19,10 @@ async fn main() -> Result<(), io::Error> {
     let mut terminal = Terminal::new(backend)?;
     let mut app = app::App::new();
     app.start_mihomo();
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
     app.update_node().await;
+    // tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    // app.update_node().await;
     loop {
         terminal.draw(|f| app.draw(f))?;
 

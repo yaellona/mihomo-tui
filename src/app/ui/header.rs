@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use crate::app::App;
 use ratatui::{
     style::{Color, Style},
@@ -6,7 +8,7 @@ use ratatui::{
 pub fn render(app: &App) -> Paragraph<'_> {
     let mut info_lines = Vec::new();
 
-    if app.proxy_running {
+    if !app.active_node.is_none() {
         info_lines.push(format!(
             "\u{1f7e2} 代理运行中 (127.0.0.1:{}) - {}",
             7890,
@@ -14,6 +16,11 @@ pub fn render(app: &App) -> Paragraph<'_> {
         ));
     } else {
         info_lines.push("\u{1f534} 代理已停止".to_string());
+    }
+    if app.proxy_running {
+        info_lines.push(format!("系统代理（开启）"));
+    } else {
+        info_lines.push(format!("系统代理（关闭）"));
     }
 
     if !app.mihomo.current_nodes.is_empty() {
