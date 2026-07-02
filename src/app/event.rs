@@ -1,5 +1,3 @@
-use crate::app::{App, AsyncMsg};
-use crate::log::LogType;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use std::io;
 

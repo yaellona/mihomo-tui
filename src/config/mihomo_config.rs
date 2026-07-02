@@ -1,6 +1,6 @@
 ﻿use serde::{Deserialize, Serialize};
 use serde_yaml;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -28,7 +28,7 @@ pub struct MihomoConfig {
     #[serde(rename = "proxy-groups")]
     pub proxy_groups: Vec<ProxyGroup>,
     #[serde(rename = "proxy-providers")]
-    pub proxy_providers: Option<HashMap<String, ProxyProvider>>,
+    pub proxy_providers: Option<IndexMap<String, ProxyProvider>>,
     pub rules: Vec<String>,
 }
 
@@ -88,12 +88,12 @@ pub struct ProxyProvider {
 impl MihomoConfig {
     pub fn default_config() -> Self {
         Self {
-            port: 7890,
-            socks_port: 7891,
+            port: MIXED_PORT,
+            socks_port: SOCKS_PORT,
             allow_lan: true,
             mode: "Rule".to_string(),
             log_level: "info".to_string(),
-            external_controller: ":9090".to_string(),
+            external_controller: EXTERNAL_CONTROLLER.to_string(),
             unified_delay: true,
             keep_alive_interval: 360,
             clash_for_android: ClashForAndroid {
@@ -143,7 +143,7 @@ impl MihomoConfig {
 
     pub fn insert_sub(&mut self, url: String, config_path: &PathBuf) -> Result<String, String> {
         if self.proxy_providers.is_none() {
-            self.proxy_providers = Some(HashMap::new());
+            self.proxy_providers = Some(IndexMap::new());
         }
         let hash = format!("{:x}", md5::compute(&url));
         if let Some(ref mut providers) = self.proxy_providers {
@@ -162,7 +162,7 @@ impl MihomoConfig {
 
     pub fn remove_sub(&mut self, sub_name: &str, config_path: &PathBuf) -> Result<(), String> {
         if let Some(ref mut providers) = self.proxy_providers {
-            providers.remove(sub_name);
+            providers.shift_remove(sub_name);
             if providers.is_empty() {
                 self.proxy_providers = None;
             }
