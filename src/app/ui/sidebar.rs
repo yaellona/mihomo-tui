@@ -1,7 +1,7 @@
-use crate::log::Logs;
+use crate::log::{LogType, Logs};
 use ratatui::{
     layout::Constraint,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table},
 };
 
@@ -14,9 +14,33 @@ fn wrap_text(text: &str, width: usize) -> String {
         .join("\n")
 }
 
-pub fn render<'a>(logs: &Logs, width: usize) -> Table<'a> {
-    // let mut info_lines = Vec::new();
+// 类型标签：强色，Error 加粗
+fn tag_style(t: &LogType) -> Style {
+    let color = match t {
+        LogType::Info => Color::LightBlue,
+        LogType::Warn => Color::Yellow,
+        LogType::Error => Color::Red,
+        LogType::Debug => Color::DarkGray,
+    };
+    let mut s = Style::default().fg(color);
+    if matches!(t, LogType::Error) {
+        s = s.add_modifier(Modifier::BOLD);
+    }
+    s
+}
 
+// 正文：同色系的淡变体 + DIM，营造"淡染"
+fn body_style(t: &LogType) -> Style {
+    let color = match t {
+        LogType::Info => Color::LightBlue,
+        LogType::Warn => Color::LightYellow,
+        LogType::Error => Color::LightRed,
+        LogType::Debug => Color::DarkGray,
+    };
+    Style::default().fg(color).add_modifier(Modifier::DIM)
+}
+
+pub fn render<'a>(logs: &Logs, width: usize) -> Table<'a> {
     let rows: Vec<Row> = logs
         .find_logs(None)
         .iter()
@@ -25,8 +49,8 @@ pub fn render<'a>(logs: &Logs, width: usize) -> Table<'a> {
             let line_count = wrapped.lines().count();
 
             Row::new(vec![
-                Cell::from(log.log_type.as_str().to_string()),
-                Cell::from(wrapped),
+                Cell::from(log.log_type.as_str()).style(tag_style(&log.log_type)),
+                Cell::from(wrapped).style(body_style(&log.log_type)),
             ])
             .height(line_count as u16) // 设置行高为换行后的行数
         })

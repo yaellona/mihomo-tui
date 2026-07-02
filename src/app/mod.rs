@@ -3,6 +3,7 @@ pub mod ui;
 use crate::command::mihomo::{self, Mihomo};
 use crate::command::system_proxy::{disable_proxy, enable_proxy, get_proxy_status};
 use crate::config::node::Node;
+use crate::constants::{CHANNEL_CAPACITY, MIXED_PORT, MIHOMO_EXE};
 use crate::log::{LogType, Logs};
 use crossterm::event::KeyCode;
 use std::collections::HashMap;
@@ -39,23 +40,25 @@ pub struct App {
     pub logs: Logs,
     pub url_input: String,
     pub popup_mode: PopupMode,
+    pub is_test_speed: bool,
     pub async_tx: mpsc::Sender<AsyncMsg>,
     pub async_rx: mpsc::Receiver<AsyncMsg>,
 }
 impl App {
     pub fn new() -> Self {
-        let (async_tx, async_rx) = mpsc::channel::<AsyncMsg>(16);
+        let (async_tx, async_rx) = mpsc::channel::<AsyncMsg>(CHANNEL_CAPACITY);
         Self {
             select_node: 0,
             select_provider: 0,
             proxy_running: get_proxy_status().map_or(false, |(v, _)| v == 1),
             active_node: None,
             current_nodes: vec![],
-            mihomo: Mihomo::new("mihomo-windows-amd64.exe".to_string()),
+            mihomo: Mihomo::new(MIHOMO_EXE.to_string()),
             should_quit: false,
             logs: Logs::new(),
             url_input: String::new(),
             popup_mode: PopupMode::None,
+            is_test_speed: false,
             async_tx,
             async_rx,
         }
@@ -87,7 +90,7 @@ impl App {
             };
         } else {
             // 开启代理
-            match enable_proxy("127.0.0.1:7890") {
+            match enable_proxy(&format!("127.0.0.1:{MIXED_PORT}")) {
                 Ok(_) => self.logs.add_log(LogType::Info, "开启系统代理".to_string()),
                 Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
             };
@@ -95,7 +98,15 @@ impl App {
     }
 
     // ===== 后台 spawn 包装（App 持有自己的 tx）=====
-    pub fn test_delay(&self) {
+    pub fn test_delay(&mut self) {
+        if self.is_test_speed {
+            self.logs.add_log(LogType::Warn, "正在测速！".to_string());
+            return;
+        }
+        self.is_test_speed = true;
+        for node in &mut self.current_nodes {
+            node.speed = format!("wait");
+        }
         let tx = self.async_tx.clone();
         tokio::spawn(async move {
             match mihomo::fetch_delays().await {
@@ -189,8 +200,11 @@ impl App {
                 for node in &mut self.current_nodes {
                     if let Some(&d) = map.get(&node.name) {
                         node.speed = format!("{d}ms");
+                    } else {
+                        node.speed = format!("-");
                     }
                 }
+                self.is_test_speed = false;
                 self.logs.add_log(LogType::Info, "测速完成".to_string());
             }
             AsyncMsg::UpdateNode(nodes) => {
@@ -203,7 +217,8 @@ impl App {
             }
             AsyncMsg::SwitchProvider => {
                 self.popup_mode = PopupMode::None;
-                self.logs.add_log(LogType::Info, "切换代理商成功".to_string());
+                self.logs
+                    .add_log(LogType::Info, "切换代理商成功".to_string());
                 self.update_nodes();
             }
             AsyncMsg::SubChecked {
@@ -309,15 +324,9 @@ impl App {
         }
 
         match key {
-            KeyCode::Char('q') => {
-                self.should_quit = true;
-            }
-
-            KeyCode::Char('p') => {
-                self.toggle_system_proxy();
-            }
+            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('p') => self.toggle_system_proxy(),
             KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
-
             KeyCode::Char('t') => self.test_delay(),
             KeyCode::Char('r') => self.update_nodes(),
             KeyCode::Char('u') => self.popup_mode = PopupMode::UrlInput,

@@ -1,6 +1,5 @@
-use std::fmt::format;
-
 use crate::app::App;
+use crate::constants::MIXED_PORT;
 use ratatui::{
     style::{Color, Style},
     widgets::{Block, Borders, Paragraph},
@@ -10,8 +9,7 @@ pub fn render(app: &App) -> Paragraph<'_> {
 
     if !app.active_node.is_none() {
         info_lines.push(format!(
-            "\u{1f7e2} 代理运行中 (127.0.0.1:{}) - {}",
-            7890,
+            "\u{1f7e2} 代理运行中 (127.0.0.1:{MIXED_PORT}) - {}",
             &app.current_nodes[app.active_node.unwrap()].name
         ));
     } else {

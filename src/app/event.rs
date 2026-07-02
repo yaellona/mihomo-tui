@@ -2,10 +2,11 @@ use crate::app::{App, AsyncMsg};
 use crate::log::LogType;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use std::io;
-use std::time::Duration;
+
+use crate::constants::POLL_INTERVAL;
 
 pub fn poll_event() -> io::Result<Option<KeyCode>> {
-    if event::poll(Duration::from_millis(100))?
+    if event::poll(POLL_INTERVAL)?
         && let Event::Key(key) = event::read()?
         && key.kind == KeyEventKind::Press
     {

@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::constants::{EXTERNAL_CONTROLLER, MIXED_PORT, SOCKS_PORT};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MihomoConfig {
     pub port: u16,

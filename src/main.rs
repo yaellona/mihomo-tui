@@ -1,6 +1,7 @@
 ﻿mod app;
 mod command;
 mod config;
+mod constants;
 mod log;
 #[cfg(test)]
 mod test;

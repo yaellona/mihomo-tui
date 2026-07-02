@@ -1,12 +1,16 @@
 use crate::config::mihomo_config::MihomoConfig;
 use crate::config::node::{MihomoNodeReport, Node, ProviderReport};
+use crate::constants::{
+    DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, PROVIDER_RETRY,
+    PROVIDER_RETRY_INTERVAL, TEST_URL,
+};
 use dirs::config_dir;
 use reqwest;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use tokio::time::{Duration, sleep};
+use tokio::time::sleep;
 
 #[derive(Debug)]
 pub struct Mihomo {
@@ -110,10 +114,12 @@ impl Mihomo {
 pub async fn fetch_delays() -> Result<HashMap<String, u32>, String> {
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(Duration::from_secs(6))
+        .timeout(DELAY_HTTP_TIMEOUT)
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
-    let url = "http://127.0.0.1:9090/group/Proxy/delay?timeout=5000&url=https://www.gstatic.com/generate_204";
+    let url = format!(
+        "{MIHOMO_API}/group/Proxy/delay?timeout={DELAY_TIMEOUT_MS}&url={TEST_URL}"
+    );
     let body = client
         .get(url)
         .send()
@@ -128,13 +134,13 @@ pub async fn fetch_delays() -> Result<HashMap<String, u32>, String> {
 pub async fn reload_config(path: PathBuf) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(Duration::from_secs(5))
+        .timeout(HTTP_TIMEOUT)
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
 
     // 传字符串路径，避免 mihomo 因相对路径解析导致 400
     let body = serde_json::json!({ "path": path.to_string_lossy(), "payload": "" });
-    let url = "http://127.0.0.1:9090/configs?force=true";
+    let url = format!("{MIHOMO_API}/configs?force=true");
     let resp = client
         .put(url)
         .json(&body)
@@ -153,7 +159,7 @@ pub async fn get_nodes() -> Result<Vec<Node>, String> {
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
-    let url = "http://127.0.0.1:9090/proxies/Proxy";
+    let url = format!("{MIHOMO_API}/proxies/Proxy");
     let body = client
         .get(url)
         .send()
@@ -176,7 +182,7 @@ pub async fn switch_node(node_name: String) -> Result<(), String> {
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
-    let url = "http://127.0.0.1:9090/proxies/Proxy";
+    let url = format!("{MIHOMO_API}/proxies/Proxy");
     let body = serde_json::json!({ "name": node_name });
     client
         .put(url)
@@ -191,12 +197,12 @@ pub async fn switch_node(node_name: String) -> Result<(), String> {
 pub async fn find_provider(sub_name: String) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(Duration::from_secs(5))
+        .timeout(HTTP_TIMEOUT)
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
-    let provider_url = format!("http://127.0.0.1:9090/providers/proxies/{}", sub_name);
+    let provider_url = format!("{MIHOMO_API}/providers/proxies/{}", sub_name);
     let mut provider_report: Option<ProviderReport> = None;
-    for _ in 0..6 {
+    for _ in 0..PROVIDER_RETRY {
         if let Ok(resp) = client.get(&provider_url).send().await {
             if resp.status().is_success() {
                 if let Ok(body) = resp.text().await {
@@ -207,7 +213,7 @@ pub async fn find_provider(sub_name: String) -> Result<(), String> {
                 }
             }
         }
-        sleep(Duration::from_millis(500)).await;
+        sleep(PROVIDER_RETRY_INTERVAL).await;
     }
     let report = provider_report.ok_or("URL验证失败：无法获取provider信息")?;
     let proxy_count = report.proxies.as_ref().map(|p| p.len()).unwrap_or(0);
