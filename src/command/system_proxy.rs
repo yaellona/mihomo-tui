@@ -1,7 +1,7 @@
 #[cfg(target_os = "windows")]
-use winreg::enums::*;
-#[cfg(target_os = "windows")]
 use winreg::RegKey;
+#[cfg(target_os = "windows")]
+use winreg::enums::*;
 pub fn enable_proxy(proxy_addr: &str) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
@@ -20,7 +20,7 @@ pub fn enable_proxy(proxy_addr: &str) -> std::io::Result<()> {
     {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
-            "System proxy configuration is not supported on Linux",
+            "暂不支持linux的系统代理喵，自己去source喵",
         ))
     }
 }
@@ -39,7 +39,7 @@ pub fn disable_proxy() -> std::io::Result<()> {
     {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
-            "System proxy configuration is not supported on Linux",
+            "暂不支持linux的系统代理喵，自己去source喵",
         ))
     }
 }
@@ -64,7 +64,7 @@ pub fn get_proxy_status() -> std::io::Result<(u32, String)> {
     {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
-            "System proxy configuration is not supported on Linux",
+            "暂不支持linux的系统代理喵，自己去source喵",
         ))
     }
 }

@@ -10,8 +10,8 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
-#[tokio::main]
-async fn main() -> Result<(), io::Error> {
+
+fn main() -> Result<(), io::Error> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -19,16 +19,13 @@ async fn main() -> Result<(), io::Error> {
     let mut terminal = Terminal::new(backend)?;
     let mut app = app::App::new();
     app.start_mihomo();
-    app.update_node().await;
-    // tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-    // app.update_node().await;
+    app.mihomo.update_nodes();
     loop {
         terminal.draw(|f| app.draw(f))?;
-
         if let Some(key) = app::event::poll_event()? {
-            app.on_key(key).await;
+            app.on_key(key);
         }
+        app::App::poll_msg();
         if app.should_quit {
             break;
         }

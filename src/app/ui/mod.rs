@@ -44,7 +44,7 @@ impl App {
             ])
             .split(chunks2[0]);
         let info = header::render(&self);
-        let content = content::render(&self.mihomo.current_nodes);
+        let content = content::render(&self.current_nodes);
         let sidebar = sidebar::render(&self.logs, chunks2[1].width as usize - 10);
 
         f.render_widget(footer, main_chunks[1]);

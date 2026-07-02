@@ -177,12 +177,6 @@ impl MihomoConfig {
         serde_yaml::to_string(self).map_err(|e| format!("序列化YAML失败: {}", e))
     }
 
-    pub fn write_to_file(&self, config_path: &PathBuf) -> Result<(), String> {
-        let yaml_str = self.to_yaml()?;
-        fs::write(config_path, yaml_str).map_err(|e| format!("写入文件失败: {}", e))?;
-        Ok(())
-    }
-
     pub fn read_from_file(config_path: &PathBuf) -> Result<Self, String> {
         let content =
             fs::read_to_string(config_path).map_err(|e| format!("读取文件失败: {}", e))?;
@@ -199,11 +193,5 @@ impl MihomoConfig {
         let yaml_str = self.to_yaml()?;
         fs::write(config_path, yaml_str).map_err(|e| format!("写入文件失败: {}", e))?;
         Ok(())
-    }
-
-    pub fn read_from_path(config_path: &PathBuf) -> Result<Self, String> {
-        let content =
-            fs::read_to_string(config_path).map_err(|e| format!("读取文件失败: {}", e))?;
-        Self::from_yaml(&content)
     }
 }

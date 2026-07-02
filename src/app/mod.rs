@@ -2,13 +2,23 @@ pub mod event;
 pub mod ui;
 use crate::command::mihomo::Mihomo;
 use crate::command::system_proxy::{disable_proxy, enable_proxy, get_proxy_status};
+use crate::config::node::Node;
 use crate::log::{Log, LogType, Logs};
 use crossterm::event::KeyCode;
+use std::collections::HashMap;
+use tokio::sync::mpsc;
 #[derive(Debug)]
 pub enum PopupMode {
     None,
     UrlInput,
     AgencySelect,
+}
+pub enum AsyncMsg {
+    DelayResult(HashMap<String, u32>), // {节点名: 延迟ms}
+    UpdateNode(Vec<Node>),
+    SwitchNode(),
+    InsertSub(),
+    Error(String),
 }
 
 #[derive(Debug)]
@@ -17,6 +27,7 @@ pub struct App {
     pub select_provider: usize,
     pub proxy_running: bool,
     pub active_node: Option<usize>,
+    pub current_nodes: Vec<Node>,
     pub mihomo: Mihomo,
     pub should_quit: bool,
     pub logs: Logs,
@@ -25,11 +36,13 @@ pub struct App {
 }
 impl App {
     pub fn new() -> Self {
+        let (async_tx, async_rx) = mpsc::channel::<AsyncMsg>(8);
         Self {
             select_node: 0,
             select_provider: 0,
             proxy_running: get_proxy_status().map_or(false, |(v, _)| v == 1),
             active_node: None,
+            current_nodes: vec![],
             mihomo: Mihomo::new("mihomo-windows-amd64.exe".to_string()),
             should_quit: false,
             logs: Logs::new(),
@@ -37,12 +50,7 @@ impl App {
             popup_mode: PopupMode::None,
         }
     }
-    pub async fn update_node(&mut self) {
-        match self.mihomo.update_node().await {
-            Ok(_) => self.logs.add_log(LogType::Info, "更新节点".to_string()),
-            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
-        };
-    }
+
     pub fn clear(&mut self) {
         match self.mihomo.stop_mihomo() {
             Ok(_) => self.logs.add_log(LogType::Info, "关闭mihomo".to_string()),
@@ -55,12 +63,7 @@ impl App {
             Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
         }
     }
-    pub async fn test_delay(&mut self) {
-        match self.mihomo.test_proxy_delay().await {
-            Ok(_) => self.logs.add_log(LogType::Info, "测速成功".to_string()),
-            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
-        }
-    }
+
     pub fn toggle_system_proxy(&mut self) {
         let is_enabled = get_proxy_status()
             .map(|(code, _)| code == 1)
@@ -80,7 +83,7 @@ impl App {
             };
         }
     }
-    pub async fn on_key(&mut self, key: KeyCode) {
+    pub fn on_key(&mut self, key: KeyCode) {
         match self.popup_mode {
             PopupMode::UrlInput => {
                 match key {
@@ -96,12 +99,12 @@ impl App {
                         self.logs
                             .add_log(LogType::Info, "正在验证URL...".to_string());
 
-                        match self.mihomo.validate_and_insert_sub(url).await {
-                            Ok(_) => self
-                                .logs
-                                .add_log(LogType::Info, "代理商URL验证成功，已添加".to_string()),
-                            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
-                        }
+                        // match self.mihomo.insert_sub(url).await {
+                        //     Ok(_) => self
+                        //         .logs
+                        //         .add_log(LogType::Info, "代理商URL验证成功，已添加".to_string()),
+                        //     Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+                        // }
                     }
                     KeyCode::Backspace => {
                         self.url_input.pop();
@@ -147,14 +150,15 @@ impl App {
                             self.select_provider = (self.select_provider + 1) % len;
                         }
                     }
-                    KeyCode::Enter => match self.mihomo.switch_provider(self.select_provider) {
-                        Ok(_) => {
-                            self.update_node().await;
-                            self.popup_mode = PopupMode::None;
-                            self.logs.add_log(LogType::Info, "切换代理商".to_string())
-                        }
-                        Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
-                    },
+                    // KeyCode::Enter => match self.mihomo.switch_provider(self.select_provider).await
+                    // {
+                    //     Ok(_) => {
+                    //         self.update_node();
+                    //         self.popup_mode = PopupMode::None;
+                    //         self.logs.add_log(LogType::Info, "切换代理商".to_string())
+                    //     }
+                    //     Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+                    // },
                     _ => {}
                 }
                 return;
@@ -172,15 +176,17 @@ impl App {
             }
             KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
 
-            KeyCode::Char('t') => {
-                self.test_delay().await;
-            }
-            KeyCode::Char('r') => {
-                self.update_node().await;
-            }
+            KeyCode::Char('t') => match self.mihomo.test_delay() {
+                Ok(_) => {}
+                Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+            },
+            KeyCode::Char('r') => match self.mihomo.update_nodes() {
+                Ok(_) => {}
+                Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+            },
             KeyCode::Char('u') => self.popup_mode = PopupMode::UrlInput,
             KeyCode::Up => {
-                let len = self.mihomo.current_nodes.len();
+                let len = self.current_nodes.len();
                 if len > 0 {
                     self.select_node = if self.select_node > 0 {
                         self.select_node - 1
@@ -190,24 +196,18 @@ impl App {
                 }
             }
             KeyCode::Down => {
-                let len = self.mihomo.current_nodes.len();
+                let len = self.current_nodes.len();
                 if len > 0 {
                     self.select_node = (self.select_node + 1) % len;
                 }
             }
             KeyCode::Enter => {
                 self.active_node = Some(self.select_node);
-
-                let node_name = self.mihomo.current_nodes[self.select_node].name.clone();
-
-                match self.mihomo.switch_node(&node_name).await {
-                    Ok(_) => {
-                        self.logs.add_log(LogType::Info, "切换节点".to_string());
-                    }
-                    Err(e) => {
-                        self.logs.add_log(LogType::Error, e.to_string());
-                    }
-                }
+                let node_name = self.current_nodes[self.select_node].name.clone();
+                match self.mihomo.switch_node(node_name) {
+                    Ok(_) => {}
+                    Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+                };
             }
             _ => {}
         }
