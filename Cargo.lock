@@ -1167,6 +1167,7 @@ dependencies = [
  "crossterm",
  "dirs",
  "indexmap",
+ "libc",
  "md5",
  "ratatui",
  "reqwest",

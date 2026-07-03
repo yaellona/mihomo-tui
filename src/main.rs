@@ -13,6 +13,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 
 use app::msg::Msg;
+use log::{LogType};
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
@@ -22,7 +23,12 @@ async fn main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut app = app::App::new();
-    app.start_mihomo();
+    if app.mihomo_running {
+        app.logs
+            .add_log(LogType::Info, "检测到mihomo已在运行".to_string());
+    } else {
+        app.start_mihomo();
+    }
     app.load_nodes();
     loop {
         terminal.draw(|f| app.draw(f))?;
@@ -34,7 +40,6 @@ async fn main() -> Result<(), io::Error> {
             break;
         }
     }
-    app.clear();
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;

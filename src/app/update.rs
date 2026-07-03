@@ -154,6 +154,10 @@ impl super::App {
                 self.should_quit = true;
             }
 
+            KeyCode::Char('s') => {
+                self.toggle_mihomo();
+            }
+
             KeyCode::Char('p') => {
                 self.toggle_system_proxy();
             }

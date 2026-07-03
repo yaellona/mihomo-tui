@@ -1,20 +1,21 @@
 use crate::config::mihomo_config::MihomoConfig;
 use crate::config::node::{MihomoNodeReport, Node, ProviderReport};
 use crate::constants::{
-    DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, PROVIDER_RETRY,
-    PROVIDER_RETRY_INTERVAL, TEST_URL,
+    DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, MIHOMO_CTRL_ADDR,
+    PROVIDER_RETRY, PROVIDER_RETRY_INTERVAL, TEST_URL,
 };
 use dirs::config_dir;
 use reqwest;
 use std::collections::HashMap;
 use std::fs;
+use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
+use std::time::Duration;
 use tokio::time::sleep;
 
 #[derive(Debug)]
 pub struct Mihomo {
-    child: Option<Child>,
     pub mihomo_path: String,
     pub config_path: PathBuf,
     pub config: MihomoConfig,
@@ -35,7 +36,6 @@ impl Mihomo {
         let config =
             MihomoConfig::read_from_file(&path).unwrap_or_else(|_| MihomoConfig::default_config());
         Self {
-            child: None,
             mihomo_path,
             config_path: path,
             config,
@@ -43,28 +43,42 @@ impl Mihomo {
     }
 
     pub fn start_mihomo(&mut self) -> Result<(), String> {
-        self.stop_mihomo()?;
         let config_dir = self.config_path.parent().ok_or("无法获取配置目录")?;
-        let child = Command::new(&self.mihomo_path)
-            .args(["-d", config_dir.to_str().ok_or("config路径无效")?])
-            .stdout(Stdio::null()) // 隐藏 stdout
-            .stderr(Stdio::null()) // 隐藏 stderr
-            .spawn()
+        let mut cmd = Command::new(&self.mihomo_path);
+        cmd.args(["-d", config_dir.to_str().ok_or("config路径无效")?])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+            cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            unsafe {
+                cmd.pre_exec(|| {
+                    if libc::setsid() < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
+
+        cmd.spawn()
             .map_err(|e| format!("启动 mihomo 失败: {}", e))?;
-        self.child = Some(child);
         Ok(())
     }
 
     pub fn stop_mihomo(&mut self) -> Result<(), String> {
-        if let Some(mut child) = self.child.take() {
-            child
-                .kill()
-                .map_err(|e| format!("停止mihomo进程失败: {}", e))?;
-            child
-                .wait()
-                .map_err(|e| format!("等待mihomo进程失败: {}", e))?;
-        }
-        Ok(())
+        let pid = find_pid_by_port().ok_or("未找到监听9090端口的mihomo进程")?;
+        kill_pid(pid)
     }
 
     pub fn write_config(&self) -> Result<(), String> {
@@ -78,7 +92,6 @@ impl Mihomo {
             .and_then(|p| p.keys().nth(index).cloned())
     }
 
-    // 同步预处理（主线程，带 &mut self）：校验 + 改 config + 写盘，返回后台所需路径
     pub fn prepare_switch_provider(&mut self, name: &str) -> Result<PathBuf, String> {
         let exists = self
             .config
@@ -96,20 +109,135 @@ impl Mihomo {
         Ok(self.config_path.clone())
     }
 
-    // 同步预处理：插入订阅 + 写盘
     pub fn prepare_insert_sub(&mut self, url: String) -> Result<(String, PathBuf), String> {
         let sub_name = self.config.insert_sub(url, &self.config_path)?;
         Ok((sub_name, self.config_path.clone()))
     }
 
-    // 同步善后（主线程）：回滚订阅 + 写盘
     pub fn rollback_sub(&mut self, sub_name: &str) -> Result<(), String> {
         self.config.remove_sub(sub_name, &self.config_path)?;
         self.write_config()
     }
 }
 
-// ===== 关联异步函数（无 self，可在 tokio::spawn 里安全调用）=====
+// ===== 端口探测 =====
+
+pub fn is_mihomo_running() -> bool {
+    let addr: std::net::SocketAddr = match MIHOMO_CTRL_ADDR.parse() {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+    TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
+}
+
+// ===== 跨平台：按端口查找 PID =====
+
+#[cfg(unix)]
+fn find_pid_by_port() -> Option<u32> {
+    // 9090 = 0x2382
+    let target_hex = "2382";
+    let inode = find_listen_inode("/proc/net/tcp", target_hex)
+        .or_else(|| find_listen_inode("/proc/net/tcp6", target_hex))?;
+    find_pid_by_inode(inode)
+}
+
+#[cfg(unix)]
+fn find_listen_inode(path: &str, port_hex: &str) -> Option<u64> {
+    let content = fs::read_to_string(path).ok()?;
+    for line in content.lines().skip(1) {
+        let cols: Vec<&str> = line.split_whitespace().collect();
+        if cols.len() < 10 {
+            continue;
+        }
+        // local_address 格式: IP:PORT (十六进制)
+        let local = cols[1];
+        if !local.ends_with(&format!(":{port_hex}")) {
+            continue;
+        }
+        // state = 0A 表示 LISTEN
+        if cols[3] != "0A" {
+            continue;
+        }
+        return cols[9].parse().ok();
+    }
+    None
+}
+
+#[cfg(unix)]
+fn find_pid_by_inode(target_inode: u64) -> Option<u32> {
+    let proc = fs::read_dir("/proc").ok()?;
+    let target = format!("socket:[{target_inode}]");
+    for entry in proc.flatten() {
+        let name = entry.file_name();
+        let pid_str = name.to_string_lossy();
+        let pid: u32 = match pid_str.parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let fd_dir = entry.path().join("fd");
+        let fds = match fs::read_dir(&fd_dir) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        for fd in fds.flatten() {
+            if let Ok(link) = fs::read_link(fd.path()) {
+                if link.to_string_lossy() == target {
+                    return Some(pid);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn find_pid_by_port() -> Option<u32> {
+    let output = Command::new("netstat")
+        .args(["-ano"])
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if !line.contains(":9090") || !line.contains("LISTENING") {
+            continue;
+        }
+        // 最后一列是 PID
+        if let Some(pid_str) = line.split_whitespace().last() {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                return Some(pid);
+            }
+        }
+    }
+    None
+}
+
+// ===== 跨平台：杀死进程 =====
+
+#[cfg(unix)]
+fn kill_pid(pid: u32) -> Result<(), String> {
+    let ret = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+    if ret == 0 {
+        Ok(())
+    } else {
+        Err(format!("停止mihomo进程(PID={pid})失败"))
+    }
+}
+
+#[cfg(windows)]
+fn kill_pid(pid: u32) -> Result<(), String> {
+    let status = Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("执行taskkill失败: {e}"))?;
+    if status.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&status.stderr);
+        Err(format!("停止mihomo进程(PID={pid})失败: {stderr}"))
+    }
+}
+
+// ===== 异步 API 调用 =====
 
 pub async fn fetch_delays() -> Result<HashMap<String, u32>, String> {
     let client = reqwest::Client::builder()
@@ -138,7 +266,6 @@ pub async fn reload_config(path: PathBuf) -> Result<(), String> {
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
 
-    // 传字符串路径，避免 mihomo 因相对路径解析导致 400
     let body = serde_json::json!({ "path": path.to_string_lossy(), "payload": "" });
     let url = format!("{MIHOMO_API}/configs?force=true");
     let resp = client
@@ -193,7 +320,6 @@ pub async fn switch_node(node_name: String) -> Result<(), String> {
     Ok(())
 }
 
-// reload 后 provider 可能尚未拉取完成，带重试等待其就绪
 pub async fn find_provider(sub_name: String) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()

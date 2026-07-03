@@ -5,7 +5,7 @@ pub mod ui;
 pub mod update;
 
 use crate::app::msg::Msg;
-use crate::command::mihomo::Mihomo;
+use crate::command::mihomo::{Mihomo, is_mihomo_running};
 use crate::command::system_proxy::{disable_proxy, enable_proxy, get_proxy_status};
 use crate::config::node::Node;
 use crate::constants::{CHANNEL_CAPACITY, MIHOMO_EXE, MIXED_PORT};
@@ -32,6 +32,7 @@ pub struct App {
     pub url_input: String,
     pub popup_mode: PopupMode,
     pub is_test_delay: bool,
+    pub mihomo_running: bool,
     pub async_tx: mpsc::Sender<Msg>,
     pub async_rx: mpsc::Receiver<Msg>,
 }
@@ -51,22 +52,38 @@ impl App {
             url_input: String::new(),
             popup_mode: PopupMode::None,
             is_test_delay: false,
+            mihomo_running: is_mihomo_running(),
             async_tx,
             async_rx,
         }
     }
 
-    pub fn clear(&mut self) {
-        match self.mihomo.stop_mihomo() {
-            Ok(_) => self.logs.add_log(LogType::Info, "关闭mihomo".to_string()),
+    pub fn start_mihomo(&mut self) {
+        match self.mihomo.start_mihomo() {
+            Ok(_) => {
+                self.mihomo_running = true;
+                self.logs.add_log(LogType::Info, "mihomo启动".to_string());
+            }
             Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
         }
     }
 
-    pub fn start_mihomo(&mut self) {
-        match self.mihomo.start_mihomo() {
-            Ok(_) => self.logs.add_log(LogType::Info, "mihomo启动".to_string()),
+    pub fn stop_mihomo(&mut self) {
+        match self.mihomo.stop_mihomo() {
+            Ok(_) => {
+                self.mihomo_running = false;
+                self.logs.add_log(LogType::Info, "已停止mihomo".to_string());
+            }
             Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+        }
+    }
+
+    pub fn toggle_mihomo(&mut self) {
+        if is_mihomo_running() {
+            self.stop_mihomo();
+        } else {
+            self.start_mihomo();
+            self.load_nodes();
         }
     }
 
@@ -76,13 +93,11 @@ impl App {
             .unwrap_or(false);
         self.proxy_running = !is_enabled;
         if is_enabled {
-            // 关闭代理
             match disable_proxy() {
                 Ok(_) => self.logs.add_log(LogType::Info, "关闭系统代理".to_string()),
                 Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
             };
         } else {
-            // 开启代理
             match enable_proxy(&format!("127.0.0.1:{MIXED_PORT}")) {
                 Ok(_) => self.logs.add_log(LogType::Info, "开启系统代理".to_string()),
                 Err(e) => self.logs.add_log(LogType::Error, e.to_string()),

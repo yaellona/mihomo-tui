@@ -15,6 +15,11 @@ pub fn render(app: &App) -> Paragraph<'_> {
     } else {
         info_lines.push("\u{1f534} 代理已停止".to_string());
     }
+    if app.mihomo_running {
+        info_lines.push("\u{1f7e2} mihomo内核(运行中)".to_string());
+    } else {
+        info_lines.push("\u{1f534} mihomo内核(已停止)".to_string());
+    }
     if app.proxy_running {
         info_lines.push(format!("系统代理（开启）"));
     } else {

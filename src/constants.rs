@@ -1,6 +1,7 @@
 //! 全局常量集中定义，避免散落在各文件的魔法值。
 
 pub const MIHOMO_API: &str = "http://127.0.0.1:9090";
+pub const MIHOMO_CTRL_ADDR: &str = "127.0.0.1:9090";
 pub const MIXED_PORT: u16 = 7890;
 pub const SOCKS_PORT: u16 = 7891;
 pub const TEST_URL: &str = "https://www.gstatic.com/generate_204";
