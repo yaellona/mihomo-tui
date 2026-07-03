@@ -4,7 +4,6 @@ pub mod header;
 pub mod popup;
 pub mod sidebar;
 use crate::app::PopupMode;
-use std::io::Split;
 
 use ratatui::{
     Frame,
@@ -15,10 +14,12 @@ use crate::app::App;
 impl App {
     pub fn draw(&mut self, f: &mut Frame) {
         let size = f.area();
-
-        let footer = footer::render(
-            "q: 退出 | ↑↓: 导航 | Enter: 启动/停止 | u: 添加订阅 | c: 切换代理商 | p: 系统代理({})",
+        let footer_text = format!(
+            "q: 退出 | ↑↓: 导航 | Enter: 启动节点 | u: 添加订阅 | c: 切换代理商 | t: 测速 | r: 刷新节点 | p: 系统代理({})",
+            if self.proxy_running { "开" } else { "关" }
         );
+        let footer = footer::render(&footer_text);
+
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
