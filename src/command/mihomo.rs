@@ -1,6 +1,5 @@
-use crate::command::mihomo;
 use crate::config::mihomo_config::MihomoConfig;
-use crate::config::node::{Node, ProviderReport, ProxyReport};
+use crate::config::node::{ProviderReport, ProxyReport};
 use crate::constants::{
     DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, MIHOMO_CTRL_ADDR,
     PROVIDER_RETRY, PROVIDER_RETRY_INTERVAL, TEST_URL,
@@ -293,11 +292,6 @@ pub async fn get_proxy() -> Result<ProxyReport, String> {
         .map_err(|e| e.to_string())?;
     let mihomo_report: ProxyReport =
         serde_json::from_str(&body).map_err(|e| format!("解析节点失败: {e}"))?;
-    // let mut nodes = vec![];
-    // for node_name in mihomo_report.all {
-    //     nodes.push(Node::new(node_name));
-    // }
-    // let current_node_name = mihomo_report.now;
     Ok(mihomo_report)
 }
 

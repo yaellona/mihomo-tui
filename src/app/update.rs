@@ -32,7 +32,6 @@ impl super::App {
                     }
                     self.current_nodes.push(Node::new(node));
                 }
-
                 self.logs.add_log(LogType::Info, "更新代理信息".to_string());
             }
             Msg::SwitchedNode => {
