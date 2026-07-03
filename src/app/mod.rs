@@ -7,6 +7,7 @@ pub mod update;
 use crate::app::msg::Msg;
 use crate::command::mihomo::{Mihomo, is_mihomo_running};
 use crate::command::system_proxy::{disable_proxy, enable_proxy, get_proxy_status};
+use crate::config::mihomo_config;
 use crate::config::node::Node;
 use crate::constants::{CHANNEL_CAPACITY, MIHOMO_EXE, MIXED_PORT};
 use crate::log::{LogType, Logs};
@@ -40,13 +41,29 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let (async_tx, async_rx) = mpsc::channel::<Msg>(CHANNEL_CAPACITY);
+        let mihomo = Mihomo::new(MIHOMO_EXE.to_string());
+        let mut select_provider = 0;
+        if mihomo.config.proxy_groups.len() > 0 {
+            if mihomo.config.proxy_groups[0].use_list.len() > 0 {
+                if let Some(idx) = mihomo
+                    .config
+                    .proxy_groups
+                    .first()
+                    .and_then(|g| g.use_list.first())
+                    .and_then(|name| mihomo.get_provider_index_by_key(name))
+                {
+                    select_provider = idx;
+                }
+            }
+        }
+
         Self {
             select_node: 0,
-            select_provider: 0,
+            select_provider,
             proxy_running: get_proxy_status().map_or(false, |(v, _)| v == 1),
             active_node: None,
             current_nodes: vec![],
-            mihomo: Mihomo::new(MIHOMO_EXE.to_string()),
+            mihomo,
             should_quit: false,
             logs: Logs::new(),
             url_input: String::new(),

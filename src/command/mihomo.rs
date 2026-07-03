@@ -91,6 +91,12 @@ impl Mihomo {
             .as_ref()
             .and_then(|p| p.keys().nth(index).cloned())
     }
+    pub fn get_provider_index_by_key(&self, key: &str) -> Option<usize> {
+        self.config
+            .proxy_providers
+            .as_ref()
+            .and_then(|p| p.get_index_of(key))
+    }
 
     pub fn prepare_switch_provider(&mut self, name: &str) -> Result<PathBuf, String> {
         let exists = self
