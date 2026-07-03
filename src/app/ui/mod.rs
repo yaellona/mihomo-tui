@@ -17,7 +17,11 @@ impl App {
         let footer_text = format!(
             "q: 退出 | ↑↓: 导航 | Enter: 启动节点 | u: 添加订阅 | c: 切换代理商 | t: 测速 | r: 刷新节点 | p: 系统代理({}) | s: mihomo({})",
             if self.proxy_running { "开" } else { "关" },
-            if self.mihomo_running { "运行中" } else { "已停止" }
+            if self.mihomo_running {
+                "运行中"
+            } else {
+                "已停止"
+            }
         );
         let footer = footer::render(&footer_text);
 
@@ -30,12 +34,14 @@ impl App {
             ])
             .split(size);
 
+        let constraint = if size.width > 100 {
+            vec![Constraint::Percentage(60), Constraint::Percentage(40)]
+        } else {
+            vec![Constraint::Min(0)]
+        };
         let chunks2 = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(60),
-                Constraint::Percentage(40), // 侧边栏
-            ])
+            .constraints(&constraint)
             .split(main_chunks[0]);
 
         let chunks3 = Layout::default()
@@ -47,10 +53,12 @@ impl App {
             .split(chunks2[0]);
         let info = header::render(&self);
         let content = content::render(&self.current_nodes);
-        let sidebar = sidebar::render(&self.logs, chunks2[1].width as usize - 10);
 
         f.render_widget(footer, main_chunks[1]);
-        f.render_widget(sidebar, chunks2[1]);
+        if constraint.len() > 1 {
+            let sidebar = sidebar::render(&self.logs, chunks2[1].width as usize - 10);
+            f.render_widget(sidebar, chunks2[1]);
+        }
         f.render_widget(info, chunks3[0]);
 
         f.render_stateful_widget(
