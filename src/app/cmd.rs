@@ -94,29 +94,30 @@ pub fn reload(tx: mpsc::Sender<AsyncTask>, path: PathBuf) {
     });
 }
 
-pub fn check_sub(tx: mpsc::Sender<AsyncTask>, sub_name: String, path: PathBuf) {
+pub fn insert_sub(tx: mpsc::Sender<AsyncTask>, url: String) {
     tokio::spawn(async move {
-        let _ = mihomo::reload_config(path).await;
-        let err = mihomo::find_provider(sub_name.clone()).await.err();
+        let result = mihomo::get_provider_name(url.clone()).await;
         let _ = tx
-            .send(Box::new(move |app| match err {
-                None => {
-                    app.logs
-                        .add_log(LogType::Info, "订阅添加成功".to_string());
-                    let tx = app.async_tx.clone();
-                    nodes(tx);
-                }
-                Some(e) => {
-                    if let Err(re) = app.mihomo.rollback_sub(&sub_name) {
-                        app.logs
-                            .add_log(LogType::Error, format!("回滚失败: {re}"));
+            .send(Box::new(move |app| match result {
+                Ok(name) => {
+                    app.popup_mode = PopupMode::None;
+                    match app
+                        .mihomo
+                        .config
+                        .insert_sub(url, name, &app.mihomo.config_path)
+                    {
+                        Ok(_) => {
+                            app.logs
+                                .add_log(LogType::Info, "插入代理商成功".to_string());
+                            let tx = app.async_tx.clone();
+                            reload(tx.clone(), app.mihomo.config_path.clone());
+                            nodes(tx);
+                        }
+                        Err(e) => app.logs.add_log(LogType::Error, e),
                     }
-                    let path = app.mihomo.config_path.clone();
-                    tokio::spawn(async move {
-                        let _ = mihomo::reload_config(path).await;
-                    });
-                    app.logs
-                        .add_log(LogType::Error, format!("订阅失败已回滚: {e}"));
+                }
+                Err(e) => {
+                    app.logs.add_log(LogType::Error, e);
                 }
             }))
             .await;

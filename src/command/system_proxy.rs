@@ -1,7 +1,7 @@
 #[cfg(target_os = "windows")]
-use winreg::RegKey;
-#[cfg(target_os = "windows")]
 use winreg::enums::*;
+#[cfg(target_os = "windows")]
+use winreg::RegKey;
 pub fn enable_proxy(proxy_addr: &str) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {

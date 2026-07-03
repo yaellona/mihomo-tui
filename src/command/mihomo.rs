@@ -114,16 +114,6 @@ impl Mihomo {
         self.write_config()?;
         Ok(self.config_path.clone())
     }
-
-    pub fn prepare_insert_sub(&mut self, url: String) -> Result<(String, PathBuf), String> {
-        let sub_name = self.config.insert_sub(url, &self.config_path)?;
-        Ok((sub_name, self.config_path.clone()))
-    }
-
-    pub fn rollback_sub(&mut self, sub_name: &str) -> Result<(), String> {
-        self.config.remove_sub(sub_name, &self.config_path)?;
-        self.write_config()
-    }
 }
 
 // ===== 端口探测 =====
@@ -317,31 +307,63 @@ pub async fn switch_node(node_name: String) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn find_provider(sub_name: String) -> Result<(), String> {
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .timeout(HTTP_TIMEOUT)
-        .build()
-        .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
-    let provider_url = format!("{MIHOMO_API}/providers/proxies/{}", sub_name);
-    let mut provider_report: Option<ProviderReport> = None;
-    for _ in 0..PROVIDER_RETRY {
-        if let Ok(resp) = client.get(&provider_url).send().await {
-            if resp.status().is_success() {
-                if let Ok(body) = resp.text().await {
-                    if let Ok(report) = serde_json::from_str::<ProviderReport>(&body) {
-                        provider_report = Some(report);
-                        break;
-                    }
-                }
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut result = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(byte) = u8::from_str_radix(
+                std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("xx"),
+                16,
+            ) {
+                result.push(byte);
+                i += 3;
+                continue;
             }
         }
-        sleep(PROVIDER_RETRY_INTERVAL).await;
+        result.push(bytes[i]);
+        i += 1;
     }
-    let report = provider_report.ok_or("URL验证失败：无法获取provider信息")?;
-    let proxy_count = report.proxies.as_ref().map(|p| p.len()).unwrap_or(0);
-    if proxy_count == 0 {
-        return Err("URL验证失败：无法从该URL加载任何代理节点".to_string());
+    String::from_utf8(result).unwrap_or_default()
+}
+
+fn parse_content_disposition(cd: &str) -> Option<String> {
+    for part in cd.split(';') {
+        let p = part.trim();
+        if p.to_lowercase().starts_with("filename*=") {
+            let val = &p[10..];
+            let segs: Vec<&str> = val.split('\'').collect();
+            let encoded = if segs.len() >= 3 { segs[2] } else { val };
+            return Some(percent_decode(encoded));
+        }
     }
-    Ok(())
+    for part in cd.split(';') {
+        let p = part.trim();
+        if p.to_lowercase().starts_with("filename=") {
+            let val = &p[9..];
+            return Some(val.trim_matches('"').trim_matches('\'').to_string());
+        }
+    }
+    None
+}
+
+pub async fn get_provider_name(url: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(DELAY_HTTP_TIMEOUT)
+        .build()
+        .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
+    let resp = client
+        .get(url)
+        .header("User-Agent", "mihomo")
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {e}"))?;
+    let cd = resp
+        .headers()
+        .get("content-disposition")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    parse_content_disposition(cd).ok_or_else(|| "响应中未找到供应商名称".to_string())
 }

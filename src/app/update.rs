@@ -37,7 +37,9 @@ impl super::App {
                         self.url_input.clear();
                         self.logs
                             .add_log(LogType::Info, "正在验证URL...".to_string());
-                        self.insert_sub(url);
+                        let tx = self.async_tx.clone();
+                        // self.insert_sub(url);
+                        cmd::insert_sub(tx, url);
                     }
                     KeyCode::Backspace => {
                         self.url_input.pop();
@@ -168,15 +170,15 @@ impl super::App {
         }
     }
 
-    fn insert_sub(&mut self, url: String) {
-        match self.mihomo.prepare_insert_sub(url) {
-            Ok((sub_name, path)) => {
-                self.logs
-                    .add_log(LogType::Info, "正在验证订阅...".to_string());
-                let tx = self.async_tx.clone();
-                cmd::check_sub(tx, sub_name, path);
-            }
-            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
-        }
-    }
+    // fn insert_sub(&mut self, url: String) {
+    //     match self.mihomo.prepare_insert_sub(url) {
+    //         Ok((sub_name, path)) => {
+    //             self.logs
+    //                 .add_log(LogType::Info, "正在验证订阅...".to_string());
+    //             let tx = self.async_tx.clone();
+    //             cmd::check_sub(tx, sub_name, path);
+    //         }
+    //         Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
+    //     }
+    // }
 }

@@ -1,6 +1,6 @@
-﻿use serde::{Deserialize, Serialize};
+﻿use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 use serde_yaml;
-use indexmap::IndexMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -141,14 +141,19 @@ impl MihomoConfig {
         }
     }
 
-    pub fn insert_sub(&mut self, url: String, config_path: &PathBuf) -> Result<String, String> {
+    pub fn insert_sub(
+        &mut self,
+        url: String,
+        sub_name: String,
+        config_path: &PathBuf,
+    ) -> Result<(), String> {
         if self.proxy_providers.is_none() {
             self.proxy_providers = Some(IndexMap::new());
         }
-        let hash = format!("{:x}", md5::compute(&url));
+
         if let Some(ref mut providers) = self.proxy_providers {
             providers.insert(
-                hash.to_string(),
+                sub_name,
                 ProxyProvider {
                     provider_type: "http".to_string(),
                     url: url,
@@ -157,7 +162,7 @@ impl MihomoConfig {
             );
         }
         self.write_to_path(config_path)?;
-        Ok(hash)
+        Ok(())
     }
 
     pub fn remove_sub(&mut self, sub_name: &str, config_path: &PathBuf) -> Result<(), String> {
