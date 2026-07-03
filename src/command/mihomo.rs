@@ -1,5 +1,6 @@
+use crate::command::mihomo;
 use crate::config::mihomo_config::MihomoConfig;
-use crate::config::node::{MihomoNodeReport, Node, ProviderReport};
+use crate::config::node::{Node, ProviderReport, ProxyReport};
 use crate::constants::{
     DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, MIHOMO_CTRL_ADDR,
     PROVIDER_RETRY, PROVIDER_RETRY_INTERVAL, TEST_URL,
@@ -192,10 +193,7 @@ fn find_pid_by_inode(target_inode: u64) -> Option<u32> {
 
 #[cfg(windows)]
 fn find_pid_by_port() -> Option<u32> {
-    let output = Command::new("netstat")
-        .args(["-ano"])
-        .output()
-        .ok()?;
+    let output = Command::new("netstat").args(["-ano"]).output().ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         if !line.contains(":9090") || !line.contains("LISTENING") {
@@ -245,9 +243,7 @@ pub async fn fetch_delays() -> Result<HashMap<String, u32>, String> {
         .timeout(DELAY_HTTP_TIMEOUT)
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
-    let url = format!(
-        "{MIHOMO_API}/group/Proxy/delay?timeout={DELAY_TIMEOUT_MS}&url={TEST_URL}"
-    );
+    let url = format!("{MIHOMO_API}/group/Proxy/delay?timeout={DELAY_TIMEOUT_MS}&url={TEST_URL}");
     let body = client
         .get(url)
         .send()
@@ -281,7 +277,7 @@ pub async fn reload_config(path: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn get_nodes() -> Result<Vec<Node>, String> {
+pub async fn get_proxy() -> Result<ProxyReport, String> {
     let client: reqwest::Client = reqwest::Client::builder()
         .no_proxy()
         .build()
@@ -295,13 +291,14 @@ pub async fn get_nodes() -> Result<Vec<Node>, String> {
         .text()
         .await
         .map_err(|e| e.to_string())?;
-    let mihomo_report: MihomoNodeReport =
+    let mihomo_report: ProxyReport =
         serde_json::from_str(&body).map_err(|e| format!("解析节点失败: {e}"))?;
-    let mut nodes = vec![];
-    for node_name in mihomo_report.all {
-        nodes.push(Node::new(node_name));
-    }
-    Ok(nodes)
+    // let mut nodes = vec![];
+    // for node_name in mihomo_report.all {
+    //     nodes.push(Node::new(node_name));
+    // }
+    // let current_node_name = mihomo_report.now;
+    Ok(mihomo_report)
 }
 
 pub async fn switch_node(node_name: String) -> Result<(), String> {

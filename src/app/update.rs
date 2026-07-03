@@ -1,5 +1,6 @@
 use crate::app::msg::Msg;
 use crate::command::mihomo;
+use crate::config::node::Node;
 use crate::log::LogType;
 use crossterm::event::KeyCode;
 
@@ -21,10 +22,18 @@ impl super::App {
                 self.logs.add_log(LogType::Info, "测速完成".to_string());
                 self.is_test_delay = false;
             }
-            Msg::Nodes(nodes) => {
-                self.current_nodes = nodes;
+            Msg::Proxy(proxy) => {
+                self.current_nodes = vec![];
                 self.select_node = 0;
-                self.logs.add_log(LogType::Info, "更新节点".to_string());
+                for (index, node) in proxy.all.into_iter().enumerate() {
+                    if node == proxy.now {
+                        self.active_node = Some(index);
+                        self.select_node = index;
+                    }
+                    self.current_nodes.push(Node::new(node));
+                }
+
+                self.logs.add_log(LogType::Info, "更新代理信息".to_string());
             }
             Msg::SwitchedNode => {
                 self.logs.add_log(LogType::Info, "切换节点".to_string());

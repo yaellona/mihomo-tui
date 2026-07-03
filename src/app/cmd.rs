@@ -18,9 +18,9 @@ pub fn delay(tx: mpsc::Sender<Msg>) {
 
 pub fn nodes(tx: mpsc::Sender<Msg>) {
     tokio::spawn(async move {
-        match mihomo::get_nodes().await {
-            Ok(n) => {
-                let _ = tx.send(Msg::Nodes(n)).await;
+        match mihomo::get_proxy().await {
+            Ok(r) => {
+                let _ = tx.send(Msg::Proxy(r)).await;
             }
             Err(e) => {
                 let _ = tx.send(Msg::Error(e)).await;

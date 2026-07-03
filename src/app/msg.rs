@@ -1,4 +1,4 @@
-use crate::config::node::Node;
+use crate::config::node::ProxyReport;
 use crossterm::event::KeyCode;
 use std::collections::HashMap;
 
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub enum Msg {
     Key(KeyCode),
     Delay(HashMap<String, u32>),
-    Nodes(Vec<Node>),
+    Proxy(ProxyReport),
     SwitchedNode,
     SwitchedProvider,
     SubChecked {

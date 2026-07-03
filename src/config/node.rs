@@ -16,7 +16,7 @@ impl Node {
 
 //用于接收mihomo的回复用的节点
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MihomoNodeReport {
+pub struct ProxyReport {
     pub alive: bool,
     pub all: Vec<String>,
     #[serde(rename = "dialer-proxy")]
