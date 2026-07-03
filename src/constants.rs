@@ -16,3 +16,5 @@ pub const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(
 
 pub const MIHOMO_EXE: &str = "mihomo";
 pub const CHANNEL_CAPACITY: usize = 16;
+pub const SUBSCRIPTION_UA: &str =
+    concat!("mihomo-tui/v", env!("CARGO_PKG_VERSION"), " clash-verge");

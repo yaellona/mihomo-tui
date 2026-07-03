@@ -26,6 +26,10 @@
 
 ![tui展示](./assets/main-image.png)
 
+2. linux中
+
+![tui展示](./assets/linux_image.png)
+
 ## TODO
 
 1. 添加tun模式。

@@ -1,8 +1,8 @@
 use crate::config::mihomo_config::MihomoConfig;
-use crate::config::node::{ProviderReport, ProxyReport};
+use crate::config::node::ProxyReport;
 use crate::constants::{
     DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, MIHOMO_CTRL_ADDR,
-    PROVIDER_RETRY, PROVIDER_RETRY_INTERVAL, TEST_URL,
+    SUBSCRIPTION_UA, TEST_URL,
 };
 use dirs::config_dir;
 use reqwest;
@@ -12,7 +12,7 @@ use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use tokio::time::sleep;
+// use tokio::time::sleep;
 
 #[derive(Debug)]
 pub struct Mihomo {
@@ -349,21 +349,37 @@ fn parse_content_disposition(cd: &str) -> Option<String> {
 }
 
 pub async fn get_provider_name(url: String) -> Result<String, String> {
+    let domain = url::Url::parse(&url)
+        .ok()
+        .and_then(|u| u.host_str().map(|s| s.to_string()));
     let client = reqwest::Client::builder()
         .no_proxy()
         .timeout(DELAY_HTTP_TIMEOUT)
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
     let resp = client
-        .get(url)
-        .header("User-Agent", "mihomo")
+        .get(&url)
+        .header("User-Agent", SUBSCRIPTION_UA)
         .send()
-        .await
-        .map_err(|e| format!("请求失败: {e}"))?;
-    let cd = resp
-        .headers()
-        .get("content-disposition")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    parse_content_disposition(cd).ok_or_else(|| "响应中未找到供应商名称".to_string())
+        .await;
+    let cd = match &resp {
+        Ok(resp) => resp
+            .headers()
+            .get("content-disposition")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or(""),
+        Err(e) => {
+            if let Some(d) = domain {
+                return Ok(d);
+            }
+            return Err(format!("请求失败: {e}"));
+        }
+    };
+    if let Some(name) = parse_content_disposition(cd) {
+        return Ok(name);
+    }
+    if let Some(d) = domain {
+        return Ok(d);
+    }
+    Err("无法解析订阅名称".to_string())
 }

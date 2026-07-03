@@ -1,10 +1,11 @@
 ﻿use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::constants::{EXTERNAL_CONTROLLER, MIXED_PORT, SOCKS_PORT};
+use crate::constants::{EXTERNAL_CONTROLLER, MIXED_PORT, SOCKS_PORT, SUBSCRIPTION_UA};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MihomoConfig {
@@ -83,6 +84,8 @@ pub struct ProxyProvider {
     pub provider_type: String,
     pub url: String,
     pub interval: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<HashMap<String, Vec<String>>>,
 }
 
 impl MihomoConfig {
@@ -144,7 +147,7 @@ impl MihomoConfig {
     pub fn insert_sub(
         &mut self,
         url: String,
-        sub_name: String,
+        mut sub_name: String,
         config_path: &PathBuf,
     ) -> Result<(), String> {
         if self.proxy_providers.is_none() {
@@ -152,12 +155,27 @@ impl MihomoConfig {
         }
 
         if let Some(ref mut providers) = self.proxy_providers {
+            if providers.contains_key(&sub_name) {
+                let base = sub_name.clone();
+                let mut i = 1;
+                loop {
+                    let candidate = format!("{base} ({i})");
+                    if !providers.contains_key(&candidate) {
+                        sub_name = candidate;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            let mut header = HashMap::new();
+            header.insert("User-Agent".to_string(), vec![SUBSCRIPTION_UA.to_string()]);
             providers.insert(
                 sub_name,
                 ProxyProvider {
                     provider_type: "http".to_string(),
-                    url: url,
+                    url,
                     interval: 3600,
+                    header: Some(header),
                 },
             );
         }
