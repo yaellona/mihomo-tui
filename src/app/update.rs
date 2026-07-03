@@ -14,6 +14,8 @@ impl super::App {
                 for node in &mut self.current_nodes {
                     if let Some(&d) = map.get(&node.name) {
                         node.speed = format!("{d}ms");
+                    } else {
+                        node.speed = "-".to_string();
                     }
                 }
                 self.logs.add_log(LogType::Info, "测速完成".to_string());
@@ -163,6 +165,9 @@ impl super::App {
                     return;
                 }
                 self.is_test_delay = true;
+                for node in &mut self.current_nodes {
+                    node.speed = "wait".to_string();
+                }
                 let tx = self.async_tx.clone();
                 cmd::delay(tx);
             }
