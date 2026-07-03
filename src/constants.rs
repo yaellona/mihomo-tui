@@ -14,5 +14,5 @@ pub const PROVIDER_RETRY: u32 = 6;
 pub const PROVIDER_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 pub const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
-pub const MIHOMO_EXE: &str = "mihomo-windows-amd64.exe";
+pub const MIHOMO_EXE: &str = "mihomo";
 pub const CHANNEL_CAPACITY: usize = 16;

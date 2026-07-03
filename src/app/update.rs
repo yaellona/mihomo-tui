@@ -1,6 +1,4 @@
 use crate::app::msg::Msg;
-use crate::command::mihomo;
-use crate::config::node::Node;
 use crate::log::LogType;
 use crossterm::event::KeyCode;
 
@@ -11,70 +9,12 @@ impl super::App {
     pub fn update(&mut self, msg: Msg) {
         match msg {
             Msg::Key(k) => self.handle_key(k),
-            Msg::Delay(map) => {
-                for node in &mut self.current_nodes {
-                    if let Some(&d) = map.get(&node.name) {
-                        node.speed = format!("{d}ms");
-                    } else {
-                        node.speed = "-".to_string();
-                    }
-                }
-                self.logs.add_log(LogType::Info, "测速完成".to_string());
-                self.is_test_delay = false;
-            }
-            Msg::Proxy(proxy) => {
-                self.current_nodes = vec![];
-                self.select_node = 0;
-                for (index, node) in proxy.all.into_iter().enumerate() {
-                    if node == proxy.now {
-                        self.active_node = Some(index);
-                        self.select_node = index;
-                    }
-                    self.current_nodes.push(Node::new(node));
-                }
-                self.logs.add_log(LogType::Info, "更新代理信息".to_string());
-            }
-            Msg::SwitchedNode => {
-                self.logs.add_log(LogType::Info, "切换节点".to_string());
-            }
-            Msg::SwitchedProvider => {
-                self.popup_mode = PopupMode::None;
-                self.logs
-                    .add_log(LogType::Info, "切换代理商成功".to_string());
-                let tx = self.async_tx.clone();
-                cmd::nodes(tx);
-            }
-            Msg::SubChecked {
-                sub_name: _,
-                err: None,
-            } => {
-                self.logs.add_log(LogType::Info, "订阅添加成功".to_string());
-                let tx = self.async_tx.clone();
-                cmd::nodes(tx);
-            }
-            Msg::SubChecked {
-                sub_name,
-                err: Some(e),
-            } => {
-                if let Err(re) = self.mihomo.rollback_sub(&sub_name) {
-                    self.logs.add_log(LogType::Error, format!("回滚失败: {re}"));
-                }
-                let path = self.mihomo.config_path.clone();
-                tokio::spawn(async move {
-                    let _ = mihomo::reload_config(path).await;
-                });
-                self.logs
-                    .add_log(LogType::Error, format!("订阅失败已回滚: {e}"));
-            }
-            Msg::Error(e) => {
-                self.logs.add_log(LogType::Error, e);
-            }
         }
     }
 
     pub fn poll(&mut self) {
-        while let Ok(m) = self.async_rx.try_recv() {
-            self.update(m);
+        while let Ok(task) = self.async_rx.try_recv() {
+            task(self);
         }
     }
 

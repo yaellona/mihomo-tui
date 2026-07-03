@@ -4,7 +4,6 @@ pub mod msg;
 pub mod ui;
 pub mod update;
 
-use crate::app::msg::Msg;
 use crate::command::mihomo::{Mihomo, is_mihomo_running};
 use crate::command::system_proxy::{disable_proxy, enable_proxy, get_proxy_status};
 use crate::config::mihomo_config;
@@ -34,13 +33,13 @@ pub struct App {
     pub popup_mode: PopupMode,
     pub is_test_delay: bool,
     pub mihomo_running: bool,
-    pub async_tx: mpsc::Sender<Msg>,
-    pub async_rx: mpsc::Receiver<Msg>,
+    pub async_tx: mpsc::Sender<cmd::AsyncTask>,
+    pub async_rx: mpsc::Receiver<cmd::AsyncTask>,
 }
 
 impl App {
     pub fn new() -> Self {
-        let (async_tx, async_rx) = mpsc::channel::<Msg>(CHANNEL_CAPACITY);
+        let (async_tx, async_rx) = mpsc::channel::<cmd::AsyncTask>(CHANNEL_CAPACITY);
         let mihomo = Mihomo::new(MIHOMO_EXE.to_string());
         let mut select_provider = 0;
         if mihomo.config.proxy_groups.len() > 0 {
