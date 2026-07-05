@@ -77,7 +77,13 @@ impl Mihomo {
     }
 
     pub fn stop_mihomo(&mut self) -> Result<(), String> {
-        let pid = find_pid_by_port().ok_or("未找到监听9090端口的mihomo进程")?;
+        let config_dir = self
+            .config_path
+            .parent()
+            .ok_or("无法获取配置目录")?
+            .to_string_lossy()
+            .to_string();
+        let pid = find_mihomo_pid(&config_dir).ok_or("未找到 mihomo 进程")?;
         kill_pid(pid)
     }
 
@@ -141,20 +147,43 @@ pub fn is_mihomo_running() -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
 }
 
-// ===== 跨平台：按端口查找 PID =====
+// ===== 查找 mihomo PID =====
 
 #[cfg(unix)]
-fn find_pid_by_port() -> Option<u32> {
-    // 9090 = 0x2382
-    let target_hex = "2382";
-    let inode = find_listen_inode("/proc/net/tcp", target_hex)
-        .or_else(|| find_listen_inode("/proc/net/tcp6", target_hex))?;
-    find_pid_by_inode(inode)
+fn find_mihomo_pid(config_dir: &str) -> Option<u32> {
+    for entry in fs::read_dir("/proc").ok()?.flatten() {
+        let pid: u32 = match entry.file_name().to_string_lossy().parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let base = entry.path();
+        let comm = match fs::read_to_string(base.join("comm")) {
+            Ok(c) => c.trim().to_string(),
+            Err(_) => continue,
+        };
+        if comm != "mihomo" {
+            continue;
+        }
+        if config_dir.is_empty() {
+            return Some(pid);
+        }
+        if let Ok(cmdline) = fs::read(base.join("cmdline")) {
+            if String::from_utf8_lossy(&cmdline).contains(config_dir) {
+                return Some(pid);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(unix))]
+fn find_mihomo_pid(_config_dir: &str) -> Option<u32> {
+    find_pid_by_port()
 }
 
 #[cfg(unix)]
 pub fn tun_capability_warning() -> Option<String> {
-    let pid = find_pid_by_port()?;
+    let pid = find_mihomo_pid("")?;
     let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
     let cap_eff = status.lines().find_map(|l| {
         l.strip_prefix("CapEff:\t")
@@ -169,55 +198,6 @@ pub fn tun_capability_warning() -> Option<String> {
             "mihomo(PID={pid})缺少CAP_NET_ADMIN/CAP_NET_RAW，TUN可能起不来。请用NixOS security.wrappers或setcap授权"
         ))
     }
-}
-
-#[cfg(unix)]
-fn find_listen_inode(path: &str, port_hex: &str) -> Option<u64> {
-    let content = fs::read_to_string(path).ok()?;
-    for line in content.lines().skip(1) {
-        let cols: Vec<&str> = line.split_whitespace().collect();
-        if cols.len() < 10 {
-            continue;
-        }
-        // local_address 格式: IP:PORT (十六进制)
-        let local = cols[1];
-        if !local.ends_with(&format!(":{port_hex}")) {
-            continue;
-        }
-        // state = 0A 表示 LISTEN
-        if cols[3] != "0A" {
-            continue;
-        }
-        return cols[9].parse().ok();
-    }
-    None
-}
-
-#[cfg(unix)]
-fn find_pid_by_inode(target_inode: u64) -> Option<u32> {
-    let proc = fs::read_dir("/proc").ok()?;
-    let target = format!("socket:[{target_inode}]");
-    for entry in proc.flatten() {
-        let name = entry.file_name();
-        let pid_str = name.to_string_lossy();
-        let pid: u32 = match pid_str.parse() {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-        let fd_dir = entry.path().join("fd");
-        let fds = match fs::read_dir(&fd_dir) {
-            Ok(f) => f,
-            Err(_) => continue,
-        };
-        for fd in fds.flatten() {
-            if let Ok(link) = fs::read_link(fd.path()) {
-                if link.to_string_lossy() == target {
-                    return Some(pid);
-                }
-            }
-        }
-    }
-    None
 }
 
 #[cfg(windows)]
