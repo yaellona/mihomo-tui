@@ -1,4 +1,4 @@
-use crate::config::mihomo_config::MihomoConfig;
+use crate::config::mihomo_config::{Dns, MihomoConfig, Tun};
 use crate::config::node::ProxyReport;
 use crate::constants::{
     DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, MIHOMO_CTRL_ADDR,
@@ -114,6 +114,21 @@ impl Mihomo {
         self.write_config()?;
         Ok(self.config_path.clone())
     }
+
+    pub fn set_tun_enabled(&mut self, enabled: bool) -> Result<PathBuf, String> {
+        if enabled {
+            let tun = self.config.tun.get_or_insert_with(Tun::default_enabled);
+            tun.enable = true;
+            self.config
+                .dns
+                .get_or_insert_with(Dns::default_enabled)
+                .enable = true;
+        } else if let Some(t) = self.config.tun.as_mut() {
+            t.enable = false;
+        }
+        self.write_config()?;
+        Ok(self.config_path.clone())
+    }
 }
 
 // ===== 端口探测 =====
@@ -135,6 +150,25 @@ fn find_pid_by_port() -> Option<u32> {
     let inode = find_listen_inode("/proc/net/tcp", target_hex)
         .or_else(|| find_listen_inode("/proc/net/tcp6", target_hex))?;
     find_pid_by_inode(inode)
+}
+
+#[cfg(unix)]
+pub fn tun_capability_warning() -> Option<String> {
+    let pid = find_pid_by_port()?;
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let cap_eff = status.lines().find_map(|l| {
+        l.strip_prefix("CapEff:\t")
+            .and_then(|v| u64::from_str_radix(v.trim(), 16).ok())
+    })?;
+    const CAP_NET_ADMIN: u64 = 1 << 12;
+    const CAP_NET_RAW: u64 = 1 << 13;
+    if cap_eff & (CAP_NET_ADMIN | CAP_NET_RAW) == (CAP_NET_ADMIN | CAP_NET_RAW) {
+        None
+    } else {
+        Some(format!(
+            "mihomo(PID={pid})缺少CAP_NET_ADMIN/CAP_NET_RAW，TUN可能起不来。请用NixOS security.wrappers或setcap授权"
+        ))
+    }
 }
 
 #[cfg(unix)]

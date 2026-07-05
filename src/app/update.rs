@@ -111,6 +111,9 @@ impl super::App {
             KeyCode::Char('p') => {
                 self.toggle_system_proxy();
             }
+            KeyCode::Char('T') => {
+                self.toggle_tun();
+            }
             KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
 
             KeyCode::Char('t') => {

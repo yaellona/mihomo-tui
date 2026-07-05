@@ -19,6 +19,10 @@ pub struct MihomoConfig {
     pub log_level: String,
     #[serde(rename = "external-controller")]
     pub external_controller: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tun: Option<Tun>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns: Option<Dns>,
     #[serde(rename = "unified-delay")]
     pub unified_delay: bool,
     #[serde(rename = "keep-alive-interval")]
@@ -68,6 +72,96 @@ pub struct PortConfig {
     pub override_destination: bool,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Tun {
+    pub enable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stack: Option<String>,
+    #[serde(default, rename = "dns-hijack", skip_serializing_if = "Option::is_none")]
+    pub dns_hijack: Option<Vec<String>>,
+    #[serde(default, rename = "auto-route", skip_serializing_if = "Option::is_none")]
+    pub auto_route: Option<bool>,
+    #[serde(default, rename = "auto-redirect", skip_serializing_if = "Option::is_none")]
+    pub auto_redirect: Option<bool>,
+    #[serde(default, rename = "auto-detect-interface", skip_serializing_if = "Option::is_none")]
+    pub auto_detect_interface: Option<bool>,
+    #[serde(default, rename = "strict-route", skip_serializing_if = "Option::is_none")]
+    pub strict_route: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mtu: Option<u32>,
+}
+
+impl Tun {
+    pub fn default_enabled() -> Self {
+        Self {
+            enable: true,
+            stack: Some("mixed".to_string()),
+            dns_hijack: Some(vec!["any:53".to_string(), "tcp://any:53".to_string()]),
+            auto_route: Some(true),
+            auto_redirect: Some(true),
+            auto_detect_interface: Some(true),
+            strict_route: Some(true),
+            mtu: Some(1500),
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Dns {
+    pub enable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listen: Option<String>,
+    #[serde(default, rename = "enhanced-mode", skip_serializing_if = "Option::is_none")]
+    pub enhanced_mode: Option<String>,
+    #[serde(default, rename = "fake-ip-range", skip_serializing_if = "Option::is_none")]
+    pub fake_ip_range: Option<String>,
+    #[serde(default, rename = "fake-ip-filter", skip_serializing_if = "Option::is_none")]
+    pub fake_ip_filter: Option<Vec<String>>,
+    #[serde(default, rename = "default-nameserver", skip_serializing_if = "Option::is_none")]
+    pub default_nameserver: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nameserver: Option<Vec<String>>,
+    #[serde(default, rename = "proxy-server-nameserver", skip_serializing_if = "Option::is_none")]
+    pub proxy_server_nameserver: Option<Vec<String>>,
+    #[serde(default, rename = "nameserver-policy", skip_serializing_if = "Option::is_none")]
+    pub nameserver_policy: Option<IndexMap<String, Vec<String>>>,
+}
+
+impl Dns {
+    pub fn default_enabled() -> Self {
+        let mut policy = IndexMap::new();
+        policy.insert(
+            "geosite:cn,private".to_string(),
+            vec!["https://223.5.5.5/dns-query".to_string()],
+        );
+        policy.insert(
+            "geosite:geolocation-!cn".to_string(),
+            vec!["https://1.1.1.1/dns-query".to_string()],
+        );
+        Self {
+            enable: true,
+            listen: Some("0.0.0.0:1053".to_string()),
+            enhanced_mode: Some("fake-ip".to_string()),
+            fake_ip_range: Some("198.18.0.1/16".to_string()),
+            fake_ip_filter: Some(vec![
+                "*.lan".to_string(),
+                "*.local".to_string(),
+                "+.msftconnecttest.com".to_string(),
+                "+.msftncsi.com".to_string(),
+                "localhost.ptlogin2.qq.com".to_string(),
+                "+.ntp.org".to_string(),
+            ]),
+            default_nameserver: Some(vec!["223.5.5.5".to_string(), "1.1.1.1".to_string()]),
+            nameserver: Some(vec![
+                "https://223.5.5.5/dns-query".to_string(),
+                "https://1.1.1.1/dns-query".to_string(),
+            ]),
+            proxy_server_nameserver: Some(vec!["https://223.5.5.5/dns-query".to_string()]),
+            nameserver_policy: Some(policy),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProxyGroup {
     pub name: String,
@@ -97,6 +191,8 @@ impl MihomoConfig {
             mode: "Rule".to_string(),
             log_level: "info".to_string(),
             external_controller: EXTERNAL_CONTROLLER.to_string(),
+            tun: None,
+            dns: None,
             unified_delay: true,
             keep_alive_interval: 360,
             clash_for_android: ClashForAndroid {

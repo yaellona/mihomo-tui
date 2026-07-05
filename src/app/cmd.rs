@@ -117,6 +117,7 @@ pub fn insert_sub(tx: mpsc::Sender<AsyncTask>, url: String) {
                     }
                 };
                 app.popup_mode = PopupMode::None;
+
                 match app
                     .mihomo
                     .config

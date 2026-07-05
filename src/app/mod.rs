@@ -24,6 +24,7 @@ pub struct App {
     pub select_node: usize,
     pub select_provider: usize,
     pub proxy_running: bool,
+    pub tun_enabled: bool,
     pub active_node: Option<usize>,
     pub current_nodes: Vec<Node>,
     pub mihomo: Mihomo,
@@ -55,11 +56,13 @@ impl App {
                 }
             }
         }
+        let tun_enabled = mihomo.config.tun.as_ref().map_or(false, |t| t.enable);
 
         Self {
             select_node: 0,
             select_provider,
             proxy_running: get_proxy_status().map_or(false, |(v, _)| v == 1),
+            tun_enabled,
             active_node: None,
             current_nodes: vec![],
             mihomo,
@@ -118,6 +121,28 @@ impl App {
                 Ok(_) => self.logs.add_log(LogType::Info, "开启系统代理".to_string()),
                 Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
             };
+        }
+    }
+
+    pub fn toggle_tun(&mut self) {
+        let new_state = !self.tun_enabled;
+        match self.mihomo.set_tun_enabled(new_state) {
+            Ok(path) => {
+                self.tun_enabled = new_state;
+                self.logs.add_log(
+                    LogType::Info,
+                    format!("TUN已{}", if new_state { "开启" } else { "关闭" }),
+                );
+                #[cfg(unix)]
+                if new_state {
+                    if let Some(warn) = crate::command::mihomo::tun_capability_warning() {
+                        self.logs.add_log(LogType::Warn, warn);
+                    }
+                }
+                let tx = self.async_tx.clone();
+                cmd::reload(tx, path);
+            }
+            Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
         }
     }
 }

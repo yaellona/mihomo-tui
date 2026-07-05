@@ -26,6 +26,12 @@ pub fn render(app: &App) -> Paragraph<'_> {
         info_lines.push(format!("系统代理（关闭）"));
     }
 
+    if app.tun_enabled {
+        info_lines.push("TUN（开启）".to_string());
+    } else {
+        info_lines.push("TUN（关闭）".to_string());
+    }
+
     if !app.current_nodes.is_empty() {
         info_lines.push(format!("共{}个节点", app.current_nodes.len()));
     }

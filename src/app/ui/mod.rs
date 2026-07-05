@@ -15,8 +15,9 @@ impl App {
     pub fn draw(&mut self, f: &mut Frame) {
         let size = f.area();
         let footer_text = format!(
-            "q: 退出 | ↑↓: 导航 | Enter: 启动节点 | u: 添加订阅 | c: 切换代理商 | t: 测速 | r: 刷新节点 | p: 系统代理({}) | s: mihomo({})",
+            "q: 退出 | ↑↓: 导航 | Enter: 启动节点 | u: 添加订阅 | c: 切换代理商 | t: 测速 | r: 刷新节点 | p: 系统代理({}) | T: TUN({}) | s: mihomo({})",
             if self.proxy_running { "开" } else { "关" },
+            if self.tun_enabled { "开" } else { "关" },
             if self.mihomo_running {
                 "运行中"
             } else {
