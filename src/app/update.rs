@@ -1,5 +1,5 @@
 use crate::app::msg::Msg;
-use crate::app::ui::popup;
+
 use crate::log::LogType;
 use crossterm::event::KeyCode;
 
@@ -84,6 +84,18 @@ impl super::App {
                             .unwrap_or(0);
                         if len > 0 {
                             self.select_provider = (self.select_provider + 1) % len;
+                        }
+                    }
+                    KeyCode::Char('d') => {
+                        if let Some(name) =
+                            self.mihomo.get_provider_key_by_index(self.select_provider)
+                        {
+                            if let Some(providers) = self.mihomo.config.proxy_providers.as_mut() {
+                                providers.shift_remove(&name);
+                                self.mihomo.write_config().ok();
+                            }
+                            let tx = self.async_tx.clone();
+                            cmd::reload(tx, self.mihomo.config_path.clone());
                         }
                     }
                     KeyCode::Enter => {

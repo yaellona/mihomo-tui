@@ -3,7 +3,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Wrap},
 };
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -64,13 +64,14 @@ pub fn render_url_input(f: &mut Frame, app: &App) {
 }
 
 pub fn render_provider_select(f: &mut Frame, app: &App) {
-    let area = centered_rect(50, 40, f.area());
+    let area = centered_rect(60, 40, f.area());
 
     // 清除背景
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title("选择代理商 (Enter 确认, Esc 取消, d 删除代理, r 重命名)")
+        .title("选择代理商")
+        .title_bottom("(Enter 确认, Esc 取消, d 删除代理, r 重命名)")
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White));
 
@@ -108,32 +109,79 @@ pub fn render_provider_select(f: &mut Frame, app: &App) {
     f.render_widget(list, inner);
 }
 
-pub fn help_key(f: &mut Frame) {
+pub fn help_key(f: &mut Frame, app: &App) {
     let area = centered_rect(50, 40, f.area());
     f.render_widget(Clear, area);
-    let block = Block::default()
-        .title("帮助 (ESC 退出)")
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White));
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    let items: Vec<String> = vec![
-        "q: 退出".to_string(),
-        "↑↓: 导航".to_string(),
-        "Enter: 启动节点".to_string(),
-        "u: 添加订阅".to_string(),
-        "c: 切换代理商".to_string(),
-        "t: 测速".to_string(),
-        "r: 刷新节点".to_string(),
-        "p: 系统代理({})".to_string(),
-        "T: TUN({})".to_string(),
-        "s: mihosmo({})".to_string(),
+    let rows: Vec<Row> = vec![
+        Row::new(vec![
+            Cell::from("q".to_string()),
+            Cell::from(format!("退出")),
+        ]),
+        Row::new(vec![
+            Cell::from("↑↓".to_string()),
+            Cell::from(format!("导航")),
+        ]),
+        Row::new(vec![
+            Cell::from("Enter".to_string()),
+            Cell::from(format!("选中节点")),
+        ]),
+        Row::new(vec![
+            Cell::from("r".to_string()),
+            Cell::from(format!("刷新节点")),
+        ]),
+        Row::new(vec![
+            Cell::from("u".to_string()),
+            Cell::from(format!("添加订阅")),
+        ]),
+        Row::new(vec![
+            Cell::from("c".to_string()),
+            Cell::from(format!("切换代理商")),
+        ]),
+        Row::new(vec![
+            Cell::from("t".to_string()),
+            Cell::from(format!("测速")),
+        ]),
+        Row::new(vec![
+            Cell::from("p".to_string()),
+            Cell::from(format!(
+                "系统代理({})",
+                if app.proxy_running {
+                    "开启".to_string()
+                } else {
+                    "关闭".to_string()
+                }
+            )),
+        ]),
+        Row::new(vec![
+            Cell::from("T".to_string()),
+            Cell::from(format!(
+                "TUN({})",
+                if app.tun_enabled {
+                    "开启".to_string()
+                } else {
+                    "关闭".to_string()
+                }
+            )),
+        ]),
+        Row::new(vec![
+            Cell::from("s".to_string()),
+            Cell::from(format!(
+                "mihomo({})",
+                if app.mihomo_running {
+                    "开启".to_string()
+                } else {
+                    "关闭".to_string()
+                }
+            )),
+        ]),
     ];
-    let list_text = items.join("\n");
 
-    let style = Style::default().fg(Color::White);
+    let table = Table::new(rows, [Constraint::Length(10), Constraint::Min(0)]).block(
+        Block::default()
+            .title("帮助")
+            .title_bottom("ESC退出")
+            .borders(Borders::ALL),
+    );
 
-    let list = Paragraph::new(list_text).style(style);
-
-    f.render_widget(list, inner);
+    f.render_widget(table, area);
 }

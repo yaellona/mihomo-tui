@@ -15,6 +15,8 @@ impl LogType {
         }
     }
 }
+const MAX_LOGS: usize = 500;
+
 #[derive(Debug)]
 pub struct Logs {
     logs: Vec<Log>,
@@ -24,8 +26,18 @@ impl Logs {
     pub fn new() -> Self {
         Self { logs: vec![] }
     }
+    pub fn len(&self) -> usize {
+        self.logs.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.logs.is_empty()
+    }
     pub fn add_log(&mut self, log_type: LogType, msg: String) {
         self.logs.push(Log::new(log_type, msg));
+        if self.logs.len() > MAX_LOGS {
+            let extra = self.logs.len() - MAX_LOGS;
+            self.logs.drain(0..extra);
+        }
     }
     pub fn find_logs(&self, log_type: Option<LogType>) -> Vec<Log> {
         match log_type {

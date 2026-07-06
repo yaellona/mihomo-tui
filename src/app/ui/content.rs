@@ -21,7 +21,7 @@ pub fn render<'a>(nodes: &Vec<Node>) -> Table<'a> {
         .style(Style::default().fg(Color::Yellow))
         .bottom_margin(1);
 
-    Table::new(rows, [Constraint::Min(0), Constraint::Length(5)])
+    Table::new(rows, [Constraint::Min(10), Constraint::Length(6)])
         .header(header)
         .block(Block::default().title("节点列表").borders(Borders::ALL))
         .row_highlight_style(Style::default().bg(Color::LightBlue))

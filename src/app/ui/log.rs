@@ -57,5 +57,7 @@ pub fn render<'a>(logs: &Logs, width: usize) -> Table<'a> {
         .collect();
 
     Table::new(rows, [Constraint::Length(5), Constraint::Min(0)])
+        .highlight_symbol("")
+        .row_highlight_style(Style::default())
         .block(Block::default().title("日志").borders(Borders::ALL))
 }

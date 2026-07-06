@@ -28,7 +28,7 @@ impl App {
             ])
             .split(size);
 
-        let constraint = if size.width > 100 {
+        let constraint = if size.width > 70 {
             vec![Constraint::Min(40), Constraint::Length(50)]
         } else {
             vec![Constraint::Min(40)]
@@ -48,9 +48,12 @@ impl App {
                 .constraints([Constraint::Length(7), Constraint::Min(0)])
                 .split(chunks2[1]);
             let info = running_info::render(&self);
-            let log = log::render(&self.logs, chunks2[1].width as usize - 10);
             f.render_widget(info, chunks3[0]);
-            f.render_widget(log, chunks3[1]);
+            let log = log::render(&self.logs, chunks2[1].width as usize - 10);
+            if !self.logs.is_empty() {
+                self.log_state.select(Some(self.logs.len() - 1));
+            }
+            f.render_stateful_widget(log, chunks3[1], &mut self.log_state);
         }
 
         f.render_stateful_widget(
@@ -68,7 +71,7 @@ impl App {
                 popup::render_provider_select(f, self);
             }
             PopupMode::HelpKey => {
-                popup::help_key(f);
+                popup::help_key(f, self);
             }
             _ => {}
         }

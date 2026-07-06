@@ -10,6 +10,7 @@ use crate::config::mihomo_config;
 use crate::config::node::Node;
 use crate::constants::{CHANNEL_CAPACITY, MIHOMO_EXE, MIXED_PORT};
 use crate::log::{LogType, Logs};
+use ratatui::widgets::TableState;
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
@@ -31,6 +32,7 @@ pub struct App {
     pub mihomo: Mihomo,
     pub should_quit: bool,
     pub logs: Logs,
+    pub log_state: TableState,
     pub url_input: String,
     pub popup_mode: PopupMode,
     pub is_test_delay: bool,
@@ -69,6 +71,7 @@ impl App {
             mihomo,
             should_quit: false,
             logs: Logs::new(),
+            log_state: TableState::default(),
             url_input: String::new(),
             popup_mode: PopupMode::None,
             is_test_delay: false,
