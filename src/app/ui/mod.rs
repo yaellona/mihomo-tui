@@ -1,8 +1,8 @@
 pub mod content;
 pub mod footer;
-pub mod header;
+pub mod log;
 pub mod popup;
-pub mod sidebar;
+pub mod running_info;
 use crate::app::PopupMode;
 
 use ratatui::{
@@ -14,18 +14,11 @@ use crate::app::App;
 impl App {
     pub fn draw(&mut self, f: &mut Frame) {
         let size = f.area();
-        let footer_text = format!(
-            "q: 退出 | ↑↓: 导航 | Enter: 启动节点 | u: 添加订阅 | c: 切换代理商 | t: 测速 | r: 刷新节点 | p: 系统代理({}) | T: TUN({}) | s: mihomo({})",
-            if self.proxy_running { "开" } else { "关" },
-            if self.tun_enabled { "开" } else { "关" },
-            if self.mihomo_running {
-                "运行中"
-            } else {
-                "已停止"
-            }
-        );
+        let footer_text = format!("q: 退出 | ↑↓: 导航 | ?: 查看帮助");
+
         let footer = footer::render(&footer_text);
 
+        //底部快捷键区域和其他区域
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -36,35 +29,33 @@ impl App {
             .split(size);
 
         let constraint = if size.width > 100 {
-            vec![Constraint::Percentage(60), Constraint::Percentage(40)]
+            vec![Constraint::Min(40), Constraint::Length(50)]
         } else {
-            vec![Constraint::Min(0)]
+            vec![Constraint::Min(40)]
         };
+        //左右两部分区域
         let chunks2 = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(&constraint)
             .split(main_chunks[0]);
+        // 侧边栏
 
-        let chunks3 = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // header
-                Constraint::Min(0),    // 中间表格
-            ])
-            .split(chunks2[0]);
-        let info = header::render(&self);
         let content = content::render(&self.current_nodes);
-
         f.render_widget(footer, main_chunks[1]);
         if constraint.len() > 1 {
-            let sidebar = sidebar::render(&self.logs, chunks2[1].width as usize - 10);
-            f.render_widget(sidebar, chunks2[1]);
+            let chunks3 = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(7), Constraint::Min(0)])
+                .split(chunks2[1]);
+            let info = running_info::render(&self);
+            let log = log::render(&self.logs, chunks2[1].width as usize - 10);
+            f.render_widget(info, chunks3[0]);
+            f.render_widget(log, chunks3[1]);
         }
-        f.render_widget(info, chunks3[0]);
 
         f.render_stateful_widget(
             &content,
-            chunks3[1],
+            chunks2[0],
             &mut ratatui::widgets::TableState::default().with_selected(Some(self.select_node)),
         );
 
@@ -75,6 +66,9 @@ impl App {
             }
             PopupMode::AgencySelect => {
                 popup::render_provider_select(f, self);
+            }
+            PopupMode::HelpKey => {
+                popup::help_key(f);
             }
             _ => {}
         }

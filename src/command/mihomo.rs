@@ -332,6 +332,8 @@ pub async fn switch_node(node_name: String) -> Result<(), String> {
     Ok(())
 }
 
+// ===== 用flclash的方式来获取代理商的名称 =====
+
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut result = Vec::with_capacity(bytes.len());

@@ -33,7 +33,7 @@ pub fn delay(tx: mpsc::Sender<AsyncTask>) {
     });
 }
 
-pub fn nodes(tx: mpsc::Sender<AsyncTask>) {
+pub fn reflash_nodes(tx: mpsc::Sender<AsyncTask>) {
     tokio::spawn(async move {
         let result = mihomo::get_proxy().await;
         let _ = tx
@@ -60,11 +60,12 @@ pub fn nodes(tx: mpsc::Sender<AsyncTask>) {
 
 pub fn switch_node(tx: mpsc::Sender<AsyncTask>, name: String) {
     tokio::spawn(async move {
-        let result = mihomo::switch_node(name).await;
+        let result = mihomo::switch_node(name.clone()).await;
         let _ = tx
             .send(Box::new(move |app| match result {
                 Ok(_) => {
-                    app.logs.add_log(LogType::Info, "切换节点".to_string());
+                    app.logs
+                        .add_log(LogType::Info, format!("切换节点：{}", name));
                 }
                 Err(e) => {
                     app.logs.add_log(LogType::Error, e);
@@ -81,10 +82,9 @@ pub fn reload(tx: mpsc::Sender<AsyncTask>, path: PathBuf) {
             .send(Box::new(move |app| match result {
                 Ok(_) => {
                     app.popup_mode = PopupMode::None;
-                    app.logs
-                        .add_log(LogType::Info, "切换代理商成功".to_string());
+                    app.logs.add_log(LogType::Info, "重置配置成功".to_string());
                     let tx = app.async_tx.clone();
-                    nodes(tx);
+                    reflash_nodes(tx);
                 }
                 Err(e) => {
                     app.logs.add_log(LogType::Error, e);
@@ -121,11 +121,11 @@ pub fn insert_sub(tx: mpsc::Sender<AsyncTask>, url: String) {
                 match app
                     .mihomo
                     .config
-                    .insert_sub(url, name, &app.mihomo.config_path)
+                    .insert_sub(url, name.clone(), &app.mihomo.config_path)
                 {
                     Ok(_) => {
                         app.logs
-                            .add_log(LogType::Info, "插入代理商成功".to_string());
+                            .add_log(LogType::Info, format!("插入代理商：{}", name));
                         let tx = app.async_tx.clone();
                         reload(tx.clone(), app.mihomo.config_path.clone());
                         // nodes(tx);

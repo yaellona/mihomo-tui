@@ -1,4 +1,5 @@
 use crate::app::msg::Msg;
+use crate::app::ui::popup;
 use crate::log::LogType;
 use crossterm::event::KeyCode;
 
@@ -20,7 +21,7 @@ impl super::App {
 
     pub fn load_nodes(&self) {
         let tx = self.async_tx.clone();
-        cmd::nodes(tx);
+        cmd::reflash_nodes(tx);
     }
 
     fn handle_key(&mut self, key: KeyCode) {
@@ -96,68 +97,73 @@ impl super::App {
                 }
                 return;
             }
-            PopupMode::None => {}
-        }
-
-        match key {
-            KeyCode::Char('q') => {
-                self.should_quit = true;
-            }
-
-            KeyCode::Char('s') => {
-                self.toggle_mihomo();
-            }
-
-            KeyCode::Char('p') => {
-                self.toggle_system_proxy();
-            }
-            KeyCode::Char('T') => {
-                self.toggle_tun();
-            }
-            KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
-
-            KeyCode::Char('t') => {
-                if self.is_test_delay {
-                    self.logs.add_log(LogType::Warn, format!("已经在测速了!"));
-                    return;
+            PopupMode::HelpKey => match key {
+                KeyCode::Esc => self.popup_mode = PopupMode::None,
+                _ => {}
+            },
+            PopupMode::None => match key {
+                KeyCode::Char('q') => {
+                    self.should_quit = true;
                 }
-                self.is_test_delay = true;
-                for node in &mut self.current_nodes {
-                    node.speed = "wait".to_string();
+
+                KeyCode::Char('s') => {
+                    self.toggle_mihomo();
                 }
-                let tx = self.async_tx.clone();
-                cmd::delay(tx);
-            }
-            KeyCode::Char('r') => {
-                let tx = self.async_tx.clone();
-                cmd::nodes(tx);
-            }
-            KeyCode::Char('u') => self.popup_mode = PopupMode::UrlInput,
-            KeyCode::Up => {
-                let len = self.current_nodes.len();
-                if len > 0 {
-                    self.select_node = if self.select_node > 0 {
-                        self.select_node - 1
-                    } else {
-                        len - 1
-                    };
+
+                KeyCode::Char('p') => {
+                    self.toggle_system_proxy();
                 }
-            }
-            KeyCode::Down => {
-                let len = self.current_nodes.len();
-                if len > 0 {
-                    self.select_node = (self.select_node + 1) % len;
+                KeyCode::Char('T') => {
+                    self.toggle_tun();
                 }
-            }
-            KeyCode::Enter => {
-                if !self.current_nodes.is_empty() {
-                    self.active_node = Some(self.select_node);
-                    let node_name = self.current_nodes[self.select_node].name.clone();
+                KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
+
+                KeyCode::Char('t') => {
+                    if self.is_test_delay {
+                        self.logs.add_log(LogType::Warn, format!("已经在测速了!"));
+                        return;
+                    }
+                    self.is_test_delay = true;
+                    for node in &mut self.current_nodes {
+                        node.speed = "wait".to_string();
+                    }
                     let tx = self.async_tx.clone();
-                    cmd::switch_node(tx, node_name);
+                    cmd::delay(tx);
                 }
-            }
-            _ => {}
+                KeyCode::Char('r') => {
+                    let tx = self.async_tx.clone();
+                    cmd::reflash_nodes(tx);
+                }
+                KeyCode::Char('u') => self.popup_mode = PopupMode::UrlInput,
+                KeyCode::Up => {
+                    let len = self.current_nodes.len();
+                    if len > 0 {
+                        self.select_node = if self.select_node > 0 {
+                            self.select_node - 1
+                        } else {
+                            len - 1
+                        };
+                    }
+                }
+                KeyCode::Down => {
+                    let len = self.current_nodes.len();
+                    if len > 0 {
+                        self.select_node = (self.select_node + 1) % len;
+                    }
+                }
+                KeyCode::Enter => {
+                    if !self.current_nodes.is_empty() {
+                        self.active_node = Some(self.select_node);
+                        let node_name = self.current_nodes[self.select_node].name.clone();
+                        let tx = self.async_tx.clone();
+                        cmd::switch_node(tx, node_name);
+                    }
+                }
+                KeyCode::Char('?') => {
+                    self.popup_mode = PopupMode::HelpKey;
+                }
+                _ => {}
+            },
         }
     }
 

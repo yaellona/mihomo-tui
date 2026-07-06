@@ -17,6 +17,7 @@ pub enum PopupMode {
     None,
     UrlInput,
     AgencySelect,
+    HelpKey,
 }
 
 #[derive(Debug)]

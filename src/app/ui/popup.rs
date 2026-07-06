@@ -70,7 +70,7 @@ pub fn render_provider_select(f: &mut Frame, app: &App) {
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title("选择代理商 (Enter 确认, Esc 取消)")
+        .title("选择代理商 (Enter 确认, Esc 取消, d 删除代理, r 重命名)")
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White));
 
@@ -99,6 +99,36 @@ pub fn render_provider_select(f: &mut Frame, app: &App) {
         })
         .unwrap_or_default();
 
+    let list_text = items.join("\n");
+
+    let style = Style::default().fg(Color::White);
+
+    let list = Paragraph::new(list_text).style(style);
+
+    f.render_widget(list, inner);
+}
+
+pub fn help_key(f: &mut Frame) {
+    let area = centered_rect(50, 40, f.area());
+    f.render_widget(Clear, area);
+    let block = Block::default()
+        .title("帮助 (ESC 退出)")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    let items: Vec<String> = vec![
+        "q: 退出".to_string(),
+        "↑↓: 导航".to_string(),
+        "Enter: 启动节点".to_string(),
+        "u: 添加订阅".to_string(),
+        "c: 切换代理商".to_string(),
+        "t: 测速".to_string(),
+        "r: 刷新节点".to_string(),
+        "p: 系统代理({})".to_string(),
+        "T: TUN({})".to_string(),
+        "s: mihosmo({})".to_string(),
+    ];
     let list_text = items.join("\n");
 
     let style = Style::default().fg(Color::White);
