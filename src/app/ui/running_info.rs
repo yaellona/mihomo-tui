@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::constants::MIXED_PORT;
 use ratatui::{
     layout::Constraint,
     style::{Color, Style},
@@ -9,7 +8,7 @@ pub fn render(app: &App) -> Table<'_> {
     let rows: Vec<Row> = vec![
         Row::new(vec![
             Cell::from("代理".to_string()),
-            Cell::from(format!("127.0.0.1:{}", MIXED_PORT)).style(Color::LightMagenta),
+            Cell::from(format!("127.0.0.1:{}", app.settings.mixed_port)).style(Color::LightMagenta),
         ]),
         Row::new(vec![
             Cell::from("节点".to_string()),

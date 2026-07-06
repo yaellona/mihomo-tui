@@ -3,6 +3,7 @@ mod command;
 mod config;
 mod constants;
 mod log;
+mod settings;
 #[cfg(test)]
 mod test;
 use crossterm::{
@@ -32,7 +33,7 @@ async fn main() -> Result<(), io::Error> {
     app.load_nodes();
     loop {
         terminal.draw(|f| app.draw(f))?;
-        if let Some(key) = app::event::poll_event()? {
+        if let Some(key) = app::event::poll_event(&app.settings)? {
             app.update(Msg::Key(key));
         }
         app.poll();

@@ -1,14 +1,10 @@
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use std::io;
 
-use crate::constants::POLL_INTERVAL;
+use crate::settings::Settings;
 
-
-
-
-
-pub fn poll_event() -> io::Result<Option<KeyCode>> {
-    if event::poll(POLL_INTERVAL)?
+pub fn poll_event(settings: &Settings) -> io::Result<Option<KeyCode>> {
+    if event::poll(settings.poll_interval())?
         && let Event::Key(key) = event::read()?
         && key.kind == KeyEventKind::Press
     {

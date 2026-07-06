@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::constants::{EXTERNAL_CONTROLLER, MIXED_PORT, SOCKS_PORT, SUBSCRIPTION_UA};
+use crate::constants::SUBSCRIPTION_UA;
+use crate::settings::Settings;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MihomoConfig {
@@ -183,14 +184,14 @@ pub struct ProxyProvider {
 }
 
 impl MihomoConfig {
-    pub fn default_config() -> Self {
+    pub fn default_config(settings: &Settings) -> Self {
         Self {
-            port: MIXED_PORT,
-            socks_port: SOCKS_PORT,
+            port: settings.mixed_port,
+            socks_port: settings.socks_port,
             allow_lan: true,
             mode: "Rule".to_string(),
             log_level: "info".to_string(),
-            external_controller: EXTERNAL_CONTROLLER.to_string(),
+            external_controller: settings.external_controller.clone(),
             tun: None,
             dns: None,
             unified_delay: true,
@@ -238,6 +239,54 @@ impl MihomoConfig {
                 "MATCH,Proxy".to_string(),
             ],
         }
+    }
+
+    pub fn provider_key_by_index(&self, index: usize) -> Option<String> {
+        self.proxy_providers
+            .as_ref()
+            .and_then(|p| p.keys().nth(index).cloned())
+    }
+
+    pub fn provider_index_by_key(&self, key: &str) -> Option<usize> {
+        self.proxy_providers
+            .as_ref()
+            .and_then(|p| p.get_index_of(key))
+    }
+
+    pub fn prepare_switch_provider(
+        &mut self,
+        name: &str,
+        config_path: &PathBuf,
+    ) -> Result<(), String> {
+        let exists = self
+            .proxy_providers
+            .as_ref()
+            .map(|providers| providers.contains_key(name))
+            .unwrap_or(false);
+        if !exists {
+            return Err(format!("代理商 '{}' 不存在", name));
+        }
+        if let Some(group) = self.proxy_groups.first_mut() {
+            group.use_list = vec![name.to_string()];
+        }
+        self.write_to_path(config_path)?;
+        Ok(())
+    }
+
+    pub fn set_tun_enabled(
+        &mut self,
+        enabled: bool,
+        config_path: &PathBuf,
+    ) -> Result<(), String> {
+        if enabled {
+            let tun = self.tun.get_or_insert_with(Tun::default_enabled);
+            tun.enable = true;
+            self.dns.get_or_insert_with(Dns::default_enabled).enable = true;
+        } else if let Some(t) = self.tun.as_mut() {
+            t.enable = false;
+        }
+        self.write_to_path(config_path)?;
+        Ok(())
     }
 
     pub fn insert_sub(

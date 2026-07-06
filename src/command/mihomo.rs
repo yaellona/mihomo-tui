@@ -1,147 +1,64 @@
-use crate::config::mihomo_config::{Dns, MihomoConfig, Tun};
 use crate::config::node::ProxyReport;
-use crate::constants::{
-    DELAY_HTTP_TIMEOUT, DELAY_TIMEOUT_MS, HTTP_TIMEOUT, MIHOMO_API, MIHOMO_CTRL_ADDR,
-    SUBSCRIPTION_UA, TEST_URL,
-};
-use dirs::config_dir;
+use crate::constants::SUBSCRIPTION_UA;
+use crate::settings::Settings;
 use reqwest;
 use std::collections::HashMap;
+#[cfg(unix)]
 use std::fs;
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
-// use tokio::time::sleep;
 
-#[derive(Debug)]
-pub struct Mihomo {
-    pub mihomo_path: String,
-    pub config_path: PathBuf,
-    pub config: MihomoConfig,
+// ===== mihomo 进程管理 =====
+
+pub fn start_mihomo(settings: &Settings, config_path: &Path) -> Result<(), String> {
+    if is_mihomo_running(settings) {
+        return Ok(());
+    }
+    let config_dir = config_path.parent().ok_or("无法获取配置目录")?;
+
+    let mut cmd = Command::new(&settings.mihomo_exe);
+    cmd.args(["-d", config_dir.to_str().ok_or("config路径无效")?])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                if libc::setsid() < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+
+    cmd.spawn()
+        .map_err(|e| format!("启动 mihomo 失败: {}", e))?;
+    Ok(())
 }
 
-impl Mihomo {
-    pub fn new(mihomo_path: String) -> Self {
-        let config_dir = config_dir()
-            .ok_or("无法获取配置目录")
-            .unwrap()
-            .join("mihomors");
-        if !config_dir.exists() {
-            fs::create_dir_all(&config_dir)
-                .map_err(|e| format!("创建目录失败: {}", e))
-                .ok();
-        }
-        let path = config_dir.join("config.yaml");
-        let config =
-            MihomoConfig::read_from_file(&path).unwrap_or_else(|_| MihomoConfig::default_config());
-        if !path.exists() {
-            config.write_to_path(&path).unwrap();
-        }
-        Self {
-            mihomo_path,
-            config_path: path,
-            config,
-        }
-    }
-
-    pub fn start_mihomo(&mut self) -> Result<(), String> {
-        if is_mihomo_running() {
-            return Ok(());
-        }
-        let config_dir = self.config_path.parent().ok_or("无法获取配置目录")?;
-
-        let mut cmd = Command::new(&self.mihomo_path);
-        cmd.args(["-d", config_dir.to_str().ok_or("config路径无效")?])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
-            const DETACHED_PROCESS: u32 = 0x00000008;
-            cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
-        }
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            unsafe {
-                cmd.pre_exec(|| {
-                    if libc::setsid() < 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Ok(())
-                });
-            }
-        }
-
-        cmd.spawn()
-            .map_err(|e| format!("启动 mihomo 失败: {}", e))?;
-        Ok(())
-    }
-
-    pub fn stop_mihomo(&mut self) -> Result<(), String> {
-        let image_name = mihomo_image_name(&self.mihomo_path);
-        kill_all_mihomo(&image_name)
-    }
-
-    pub fn write_config(&self) -> Result<(), String> {
-        self.config.write_to_path(&self.config_path)
-    }
-
-    pub fn get_provider_key_by_index(&self, index: usize) -> Option<String> {
-        self.config
-            .proxy_providers
-            .as_ref()
-            .and_then(|p| p.keys().nth(index).cloned())
-    }
-    pub fn get_provider_index_by_key(&self, key: &str) -> Option<usize> {
-        self.config
-            .proxy_providers
-            .as_ref()
-            .and_then(|p| p.get_index_of(key))
-    }
-
-    pub fn prepare_switch_provider(&mut self, name: &str) -> Result<PathBuf, String> {
-        let exists = self
-            .config
-            .proxy_providers
-            .as_ref()
-            .map(|providers| providers.contains_key(name))
-            .unwrap_or(false);
-        if !exists {
-            return Err(format!("代理商 '{}' 不存在", name));
-        }
-        if let Some(group) = self.config.proxy_groups.first_mut() {
-            group.use_list = vec![name.to_string()];
-        }
-        self.write_config()?;
-        Ok(self.config_path.clone())
-    }
-
-    pub fn set_tun_enabled(&mut self, enabled: bool) -> Result<PathBuf, String> {
-        if enabled {
-            let tun = self.config.tun.get_or_insert_with(Tun::default_enabled);
-            tun.enable = true;
-            self.config
-                .dns
-                .get_or_insert_with(Dns::default_enabled)
-                .enable = true;
-        } else if let Some(t) = self.config.tun.as_mut() {
-            t.enable = false;
-        }
-        self.write_config()?;
-        Ok(self.config_path.clone())
-    }
+pub fn stop_mihomo(settings: &Settings) -> Result<(), String> {
+    let image_name = mihomo_image_name(&settings.mihomo_exe);
+    kill_all_mihomo(&image_name)
 }
 
 // ===== 端口探测 =====
 
-pub fn is_mihomo_running() -> bool {
-    let addr: std::net::SocketAddr = match MIHOMO_CTRL_ADDR.parse() {
+pub fn is_mihomo_running(settings: &Settings) -> bool {
+    let addr: std::net::SocketAddr = match settings.mihomo_ctrl_addr.parse() {
         Ok(a) => a,
         Err(_) => return false,
     };
@@ -257,13 +174,16 @@ fn kill_all_mihomo(_image_name: &str) -> Result<(), String> {
 
 // ===== 异步 API 调用 =====
 
-pub async fn fetch_delays() -> Result<HashMap<String, u32>, String> {
+pub async fn fetch_delays(settings: &Settings) -> Result<HashMap<String, u32>, String> {
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(DELAY_HTTP_TIMEOUT)
+        .timeout(settings.delay_http_timeout())
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
-    let url = format!("{MIHOMO_API}/group/Proxy/delay?timeout={DELAY_TIMEOUT_MS}&url={TEST_URL}");
+    let url = format!(
+        "{}/group/Proxy/delay?timeout={}&url={}",
+        settings.mihomo_api, settings.delay_timeout_ms, settings.test_url
+    );
     let body = client
         .get(url)
         .send()
@@ -275,15 +195,15 @@ pub async fn fetch_delays() -> Result<HashMap<String, u32>, String> {
     serde_json::from_str::<HashMap<String, u32>>(&body).map_err(|e| format!("解析延迟失败: {e}"))
 }
 
-pub async fn reload_config(path: PathBuf) -> Result<(), String> {
+pub async fn reload_config(settings: &Settings, path: PathBuf) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(HTTP_TIMEOUT)
+        .timeout(settings.http_timeout())
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
 
     let body = serde_json::json!({ "path": path.to_string_lossy(), "payload": "" });
-    let url = format!("{MIHOMO_API}/configs?force=true");
+    let url = format!("{}/configs?force=true", settings.mihomo_api);
     let resp = client
         .put(url)
         .json(&body)
@@ -297,12 +217,12 @@ pub async fn reload_config(path: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn get_proxy() -> Result<ProxyReport, String> {
+pub async fn get_proxy(settings: &Settings) -> Result<ProxyReport, String> {
     let client: reqwest::Client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
-    let url = format!("{MIHOMO_API}/proxies/Proxy");
+    let url = format!("{}/proxies/Proxy", settings.mihomo_api);
     let body = client
         .get(url)
         .send()
@@ -316,12 +236,12 @@ pub async fn get_proxy() -> Result<ProxyReport, String> {
     Ok(mihomo_report)
 }
 
-pub async fn switch_node(node_name: String) -> Result<(), String> {
+pub async fn switch_node(settings: &Settings, node_name: String) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
-    let url = format!("{MIHOMO_API}/proxies/Proxy");
+    let url = format!("{}/proxies/Proxy", settings.mihomo_api);
     let body = serde_json::json!({ "name": node_name });
     client
         .put(url)
@@ -375,13 +295,13 @@ fn parse_content_disposition(cd: &str) -> Option<String> {
     None
 }
 
-pub async fn get_provider_name(url: String) -> Result<String, String> {
+pub async fn get_provider_name(settings: &Settings, url: String) -> Result<String, String> {
     let domain = url::Url::parse(&url)
         .ok()
         .and_then(|u| u.host_str().map(|s| s.to_string()));
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(DELAY_HTTP_TIMEOUT)
+        .timeout(settings.delay_http_timeout())
         .build()
         .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
     let resp = client

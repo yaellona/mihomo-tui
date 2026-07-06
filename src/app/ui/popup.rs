@@ -80,7 +80,6 @@ pub fn render_provider_select(f: &mut Frame, app: &App) {
 
     // 构建代理商列表
     let items: Vec<String> = app
-        .mihomo
         .config
         .proxy_providers
         .as_ref()

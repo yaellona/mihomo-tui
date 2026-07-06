@@ -4,7 +4,7 @@ use crate::log::LogType;
 use crossterm::event::KeyCode;
 
 use super::PopupMode;
-use super::cmd;
+use super::actions;
 
 impl super::App {
     pub fn update(&mut self, msg: Msg) {
@@ -21,7 +21,7 @@ impl super::App {
 
     pub fn load_nodes(&self) {
         let tx = self.async_tx.clone();
-        cmd::reflash_nodes(tx);
+        actions::reflash_nodes(tx, self.settings.clone());
     }
 
     fn handle_key(&mut self, key: KeyCode) {
@@ -32,16 +32,7 @@ impl super::App {
                         self.popup_mode = PopupMode::None;
                         self.url_input.clear();
                     }
-                    KeyCode::Enter if !self.url_input.is_empty() => {
-                        let url = self.url_input.clone();
-                        self.popup_mode = PopupMode::None;
-                        self.url_input.clear();
-                        self.logs
-                            .add_log(LogType::Info, "正在验证URL...".to_string());
-                        let tx = self.async_tx.clone();
-                        // self.insert_sub(url);
-                        cmd::insert_sub(tx, url);
-                    }
+                    KeyCode::Enter => self.submit_url(),
                     KeyCode::Backspace => {
                         self.url_input.pop();
                     }
@@ -57,50 +48,12 @@ impl super::App {
                     KeyCode::Esc => {
                         self.popup_mode = PopupMode::None;
                     }
-
-                    KeyCode::Up => {
-                        let len = self
-                            .mihomo
-                            .config
-                            .proxy_providers
-                            .as_ref()
-                            .map(|p| p.len())
-                            .unwrap_or(0);
-                        if len > 0 {
-                            self.select_provider = if self.select_provider > 0 {
-                                self.select_provider - 1
-                            } else {
-                                len - 1
-                            };
-                        }
-                    }
-                    KeyCode::Down => {
-                        let len = self
-                            .mihomo
-                            .config
-                            .proxy_providers
-                            .as_ref()
-                            .map(|p| p.len())
-                            .unwrap_or(0);
-                        if len > 0 {
-                            self.select_provider = (self.select_provider + 1) % len;
-                        }
-                    }
-                    KeyCode::Char('d') => {
-                        if let Some(name) =
-                            self.mihomo.get_provider_key_by_index(self.select_provider)
-                        {
-                            if let Some(providers) = self.mihomo.config.proxy_providers.as_mut() {
-                                providers.shift_remove(&name);
-                                self.mihomo.write_config().ok();
-                            }
-                            let tx = self.async_tx.clone();
-                            cmd::reload(tx, self.mihomo.config_path.clone());
-                        }
-                    }
+                    KeyCode::Up => self.navigate_provider(-1),
+                    KeyCode::Down => self.navigate_provider(1),
+                    KeyCode::Char('d') => self.delete_current_provider(),
                     KeyCode::Enter => {
                         if let Some(name) =
-                            self.mihomo.get_provider_key_by_index(self.select_provider)
+                            self.config.provider_key_by_index(self.select_provider)
                         {
                             self.switch_provider(name);
                         }
@@ -130,45 +83,20 @@ impl super::App {
                 }
                 KeyCode::Char('c') => self.popup_mode = PopupMode::AgencySelect,
 
-                KeyCode::Char('t') => {
-                    if self.is_test_delay {
-                        self.logs.add_log(LogType::Warn, format!("已经在测速了!"));
-                        return;
-                    }
-                    self.is_test_delay = true;
-                    for node in &mut self.current_nodes {
-                        node.speed = "wait".to_string();
-                    }
-                    let tx = self.async_tx.clone();
-                    cmd::delay(tx);
-                }
+                KeyCode::Char('t') => self.start_delay_test(),
                 KeyCode::Char('r') => {
                     let tx = self.async_tx.clone();
-                    cmd::reflash_nodes(tx);
+                    actions::reflash_nodes(tx, self.settings.clone());
                 }
                 KeyCode::Char('u') => self.popup_mode = PopupMode::UrlInput,
-                KeyCode::Up => {
-                    let len = self.current_nodes.len();
-                    if len > 0 {
-                        self.select_node = if self.select_node > 0 {
-                            self.select_node - 1
-                        } else {
-                            len - 1
-                        };
-                    }
-                }
-                KeyCode::Down => {
-                    let len = self.current_nodes.len();
-                    if len > 0 {
-                        self.select_node = (self.select_node + 1) % len;
-                    }
-                }
+                KeyCode::Up => self.navigate_node(-1),
+                KeyCode::Down => self.navigate_node(1),
                 KeyCode::Enter => {
                     if !self.current_nodes.is_empty() {
                         self.active_node = Some(self.select_node);
                         let node_name = self.current_nodes[self.select_node].name.clone();
                         let tx = self.async_tx.clone();
-                        cmd::switch_node(tx, node_name);
+                        actions::switch_node(tx, self.settings.clone(), node_name);
                     }
                 }
                 KeyCode::Char('?') => {
@@ -180,26 +108,14 @@ impl super::App {
     }
 
     fn switch_provider(&mut self, name: String) {
-        match self.mihomo.prepare_switch_provider(&name) {
-            Ok(path) => {
+        match self.config.prepare_switch_provider(&name, &self.config_path) {
+            Ok(()) => {
                 self.logs
                     .add_log(LogType::Info, "正在切换代理商...".to_string());
                 let tx = self.async_tx.clone();
-                cmd::reload(tx, path);
+                actions::reload(tx, self.settings.clone(), self.config_path.clone());
             }
             Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
         }
     }
-
-    // fn insert_sub(&mut self, url: String) {
-    //     match self.mihomo.prepare_insert_sub(url) {
-    //         Ok((sub_name, path)) => {
-    //             self.logs
-    //                 .add_log(LogType::Info, "正在验证订阅...".to_string());
-    //             let tx = self.async_tx.clone();
-    //             cmd::check_sub(tx, sub_name, path);
-    //         }
-    //         Err(e) => self.logs.add_log(LogType::Error, e.to_string()),
-    //     }
-    // }
 }
