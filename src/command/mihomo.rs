@@ -1,14 +1,17 @@
 use crate::config::node::ProxyReport;
 use crate::constants::SUBSCRIPTION_UA;
 use crate::settings::Settings;
+use flate2::read::GzDecoder;
 use reqwest;
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::fs;
+use std::io::Cursor;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
+use zip::ZipArchive;
 
 // ===== mihomo 进程管理 =====
 
@@ -115,11 +118,12 @@ pub fn tun_capability_warning() -> Option<String> {
 
 // ===== 跨平台：按映像名杀死所有 mihomo 进程 =====
 
-fn mihomo_image_name(mihomo_path: &str) -> String {
-    std::path::Path::new(mihomo_path)
+fn mihomo_image_name(mihomo_path: &Path) -> String {
+    mihomo_path
         .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| mihomo_path.to_string())
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| mihomo_path.to_string_lossy().to_string())
 }
 
 #[cfg(windows)]
@@ -330,3 +334,70 @@ pub async fn get_provider_name(settings: &Settings, url: String) -> Result<Strin
     }
     Err("无法解析订阅名称".to_string())
 }
+
+pub async fn download_mihomo(settings: &Settings, url: String) -> Result<String, String> {
+    let is_zip = url.ends_with(".zip");
+    let is_gz = url.ends_with(".gz");
+
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("创建HTTP客户端失败: {e}"))?;
+    let bytes = client
+        .get(&url)
+        .header("User-Agent", SUBSCRIPTION_UA)
+        .send()
+        .await
+        .map_err(|e| format!("下载失败: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("服务器返回错误: {e}"))?
+        .bytes()
+        .await
+        .map_err(|e| format!("读取响应失败: {e}"))?;
+
+    let target_name = settings
+        .mihomo_exe
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("无法获取mihomo文件名")?;
+    let out_path = &settings.mihomo_exe;
+
+    if is_zip {
+        let reader = Cursor::new(bytes);
+        let mut archive = ZipArchive::new(reader).map_err(|e| format!("打开zip失败: {e}"))?;
+        for i in 0..archive.len() {
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| format!("读取zip条目失败: {e}"))?;
+            if file.name().ends_with(target_name) {
+                let mut out =
+                    std::fs::File::create(out_path).map_err(|e| format!("创建文件失败: {e}"))?;
+                std::io::copy(&mut file, &mut out).map_err(|e| format!("写入文件失败: {e}"))?;
+                set_executable(out_path);
+                return Ok(format!("下载成功: {}", out_path.display()));
+            }
+        }
+        Err(format!("zip 中未找到 {}", target_name))
+    } else if is_gz {
+        let decoder = GzDecoder::new(Cursor::new(bytes));
+        let mut out = std::fs::File::create(out_path).map_err(|e| format!("创建文件失败: {e}"))?;
+        std::io::copy(&mut std::io::BufReader::new(decoder), &mut out)
+            .map_err(|e| format!("解压失败: {e}"))?;
+        set_executable(out_path);
+        Ok(format!("下载成功: {}", out_path.display()))
+    } else {
+        std::fs::write(out_path, &bytes).map_err(|e| format!("写入文件失败: {e}"))?;
+        set_executable(out_path);
+        Ok(format!("下载成功: {}", out_path.display()))
+    }
+}
+
+#[cfg(unix)]
+fn set_executable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
+}
+
+#[cfg(not(unix))]
+fn set_executable(_path: &std::path::Path) {}

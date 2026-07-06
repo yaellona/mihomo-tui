@@ -78,15 +78,35 @@ pub struct Tun {
     pub enable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack: Option<String>,
-    #[serde(default, rename = "dns-hijack", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "dns-hijack",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub dns_hijack: Option<Vec<String>>,
-    #[serde(default, rename = "auto-route", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "auto-route",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub auto_route: Option<bool>,
-    #[serde(default, rename = "auto-redirect", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "auto-redirect",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub auto_redirect: Option<bool>,
-    #[serde(default, rename = "auto-detect-interface", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "auto-detect-interface",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub auto_detect_interface: Option<bool>,
-    #[serde(default, rename = "strict-route", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "strict-route",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub strict_route: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mtu: Option<u32>,
@@ -112,19 +132,43 @@ pub struct Dns {
     pub enable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub listen: Option<String>,
-    #[serde(default, rename = "enhanced-mode", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "enhanced-mode",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub enhanced_mode: Option<String>,
-    #[serde(default, rename = "fake-ip-range", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "fake-ip-range",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub fake_ip_range: Option<String>,
-    #[serde(default, rename = "fake-ip-filter", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "fake-ip-filter",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub fake_ip_filter: Option<Vec<String>>,
-    #[serde(default, rename = "default-nameserver", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "default-nameserver",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub default_nameserver: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nameserver: Option<Vec<String>>,
-    #[serde(default, rename = "proxy-server-nameserver", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "proxy-server-nameserver",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub proxy_server_nameserver: Option<Vec<String>>,
-    #[serde(default, rename = "nameserver-policy", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "nameserver-policy",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub nameserver_policy: Option<IndexMap<String, Vec<String>>>,
 }
 
@@ -273,11 +317,7 @@ impl MihomoConfig {
         Ok(())
     }
 
-    pub fn set_tun_enabled(
-        &mut self,
-        enabled: bool,
-        config_path: &PathBuf,
-    ) -> Result<(), String> {
+    pub fn set_tun_enabled(&mut self, enabled: bool, config_path: &PathBuf) -> Result<(), String> {
         if enabled {
             let tun = self.tun.get_or_insert_with(Tun::default_enabled);
             tun.enable = true;

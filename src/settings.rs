@@ -1,5 +1,6 @@
+use crate::constants::CONFIG_DIR_NAME;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,12 +17,32 @@ pub struct Settings {
     pub provider_retry: u32,
     pub provider_retry_interval_ms: u64,
     pub poll_interval_ms: u64,
-    pub mihomo_exe: String,
+    pub mihomo_exe: PathBuf,
     pub channel_capacity: usize,
+    #[serde(skip)]
+    pub mihomo_github_url: String,
+    pub system: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        let exe_name: String;
+        let system: String;
+        #[cfg(windows)]
+        {
+            exe_name = "mihomo-windows-amd64.exe".to_string();
+            system = "windows".to_string();
+        }
+        #[cfg(unix)]
+        {
+            exe_name = "mihomo".to_string();
+            system = "linux".to_string();
+        }
+
+        let mihomo_exe = dirs::data_local_dir()
+            .map(|d| d.join(CONFIG_DIR_NAME).join(&exe_name))
+            .unwrap();
+
         Self {
             mihomo_api: "http://127.0.0.1:9090".to_string(),
             mihomo_ctrl_addr: "127.0.0.1:9090".to_string(),
@@ -35,8 +56,18 @@ impl Default for Settings {
             provider_retry: 6,
             provider_retry_interval_ms: 500,
             poll_interval_ms: 100,
-            mihomo_exe: "mihomo-windows-amd64.exe".to_string(),
+            mihomo_exe,
+            system: system.clone(),
             channel_capacity: 16,
+            mihomo_github_url: format!(
+                "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.27/mihomo-{}-amd64-v1.19.27.{}",
+                system,
+                if system == "windows" {
+                    "zip"
+                } else {
+                    "gz"
+                }
+            ),
         }
     }
 }

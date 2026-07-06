@@ -41,6 +41,7 @@ pub struct App {
     pub popup_mode: PopupMode,
     pub is_test_delay: bool,
     pub mihomo_running: bool,
+    pub is_downloading: bool,
     pub async_tx: mpsc::Sender<actions::AsyncTask>,
     pub async_rx: mpsc::Receiver<actions::AsyncTask>,
 }
@@ -99,12 +100,18 @@ impl App {
             popup_mode: PopupMode::None,
             is_test_delay: false,
             mihomo_running,
+            is_downloading: false,
             async_tx,
             async_rx,
         }
     }
 
     pub fn start_mihomo(&mut self) {
+        if !self.settings.mihomo_exe.exists() {
+            self.logs
+                .add_log(LogType::Warn, "请先下载mihomo内核".to_string());
+            return;
+        }
         match mihomo::start_mihomo(&self.settings, &self.config_path) {
             Ok(_) => {
                 self.mihomo_running = true;

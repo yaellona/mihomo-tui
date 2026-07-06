@@ -52,8 +52,7 @@ impl super::App {
                     KeyCode::Down => self.navigate_provider(1),
                     KeyCode::Char('d') => self.delete_current_provider(),
                     KeyCode::Enter => {
-                        if let Some(name) =
-                            self.config.provider_key_by_index(self.select_provider)
+                        if let Some(name) = self.config.provider_key_by_index(self.select_provider)
                         {
                             self.switch_provider(name);
                         }
@@ -99,6 +98,14 @@ impl super::App {
                         actions::switch_node(tx, self.settings.clone(), node_name);
                     }
                 }
+                KeyCode::Char('d') => {
+                    if self.settings.mihomo_exe.exists() {
+                        self.logs
+                            .add_log(LogType::Warn, "mihomo已经安装过了".to_string());
+                        return;
+                    }
+                    actions::download_mihomo(self, self.settings.clone());
+                }
                 KeyCode::Char('?') => {
                     self.popup_mode = PopupMode::HelpKey;
                 }
@@ -108,7 +115,10 @@ impl super::App {
     }
 
     fn switch_provider(&mut self, name: String) {
-        match self.config.prepare_switch_provider(&name, &self.config_path) {
+        match self
+            .config
+            .prepare_switch_provider(&name, &self.config_path)
+        {
             Ok(()) => {
                 self.logs
                     .add_log(LogType::Info, "正在切换代理商...".to_string());

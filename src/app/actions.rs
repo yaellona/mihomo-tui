@@ -131,6 +131,33 @@ pub fn insert_sub(tx: mpsc::Sender<AsyncTask>, settings: Settings, url: String) 
             .await;
     });
 }
+pub fn download_mihomo(app: &mut App, settings: Settings) {
+    if app.is_downloading {
+        app.logs
+            .add_log(LogType::Warn, "正在安装mihomo".to_string());
+        return;
+    }
+    app.is_downloading = true;
+    app.logs
+        .add_log(LogType::Info, "正在安装mihomo".to_string());
+    let tx = app.async_tx.clone();
+    tokio::spawn(async move {
+        let result = mihomo::download_mihomo(&settings, settings.mihomo_github_url.clone()).await;
+        let _ = tx
+            .send(Box::new(move |app| match result {
+                Ok(_) => {
+                    app.logs
+                        .add_log(LogType::Info, "下载mihomo成功".to_string());
+                    app.is_downloading = false;
+                }
+                Err(e) => {
+                    app.logs.add_log(LogType::Error, e);
+                    app.is_downloading = false;
+                }
+            }))
+            .await;
+    });
+}
 
 impl super::App {
     pub fn navigate_provider(&mut self, step: i32) {
@@ -143,8 +170,7 @@ impl super::App {
         if len == 0 {
             return;
         }
-        self.select_provider =
-            (self.select_provider as i32 + step).rem_euclid(len as i32) as usize;
+        self.select_provider = (self.select_provider as i32 + step).rem_euclid(len as i32) as usize;
     }
 
     pub fn navigate_node(&mut self, step: i32) {
@@ -157,7 +183,8 @@ impl super::App {
 
     pub fn start_delay_test(&mut self) {
         if self.is_test_delay {
-            self.logs.add_log(LogType::Warn, "已经在测速了!".to_string());
+            self.logs
+                .add_log(LogType::Warn, "已经在测速了!".to_string());
             return;
         }
         self.is_test_delay = true;
