@@ -128,7 +128,7 @@ pub fn insert_sub(tx: mpsc::Sender<AsyncTask>, url: String) {
                             .add_log(LogType::Info, "插入代理商成功".to_string());
                         let tx = app.async_tx.clone();
                         reload(tx.clone(), app.mihomo.config_path.clone());
-                        nodes(tx);
+                        // nodes(tx);
                     }
                     Err(e) => app.logs.add_log(LogType::Error, e),
                 }

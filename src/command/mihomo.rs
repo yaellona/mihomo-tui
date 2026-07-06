@@ -35,6 +35,9 @@ impl Mihomo {
         let path = config_dir.join("config.yaml");
         let config =
             MihomoConfig::read_from_file(&path).unwrap_or_else(|_| MihomoConfig::default_config());
+        if !path.exists() {
+            config.write_to_path(&path).unwrap();
+        }
         Self {
             mihomo_path,
             config_path: path,
@@ -43,7 +46,11 @@ impl Mihomo {
     }
 
     pub fn start_mihomo(&mut self) -> Result<(), String> {
+        if is_mihomo_running() {
+            return Ok(());
+        }
         let config_dir = self.config_path.parent().ok_or("无法获取配置目录")?;
+
         let mut cmd = Command::new(&self.mihomo_path);
         cmd.args(["-d", config_dir.to_str().ok_or("config路径无效")?])
             .stdin(Stdio::null())
@@ -77,14 +84,8 @@ impl Mihomo {
     }
 
     pub fn stop_mihomo(&mut self) -> Result<(), String> {
-        let config_dir = self
-            .config_path
-            .parent()
-            .ok_or("无法获取配置目录")?
-            .to_string_lossy()
-            .to_string();
-        let pid = find_mihomo_pid(&config_dir).ok_or("未找到 mihomo 进程")?;
-        kill_pid(pid)
+        let image_name = mihomo_image_name(&self.mihomo_path);
+        kill_all_mihomo(&image_name)
     }
 
     pub fn write_config(&self) -> Result<(), String> {
@@ -176,11 +177,6 @@ fn find_mihomo_pid(config_dir: &str) -> Option<u32> {
     None
 }
 
-#[cfg(not(unix))]
-fn find_mihomo_pid(_config_dir: &str) -> Option<u32> {
-    find_pid_by_port()
-}
-
 #[cfg(unix)]
 pub fn tun_capability_warning() -> Option<String> {
     let pid = find_mihomo_pid("")?;
@@ -200,47 +196,62 @@ pub fn tun_capability_warning() -> Option<String> {
     }
 }
 
-#[cfg(windows)]
-fn find_pid_by_port() -> Option<u32> {
-    let output = Command::new("netstat").args(["-ano"]).output().ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if !line.contains(":9090") || !line.contains("LISTENING") {
-            continue;
-        }
-        // 最后一列是 PID
-        if let Some(pid_str) = line.split_whitespace().last() {
-            if let Ok(pid) = pid_str.parse::<u32>() {
-                return Some(pid);
-            }
-        }
-    }
-    None
-}
+// ===== 跨平台：按映像名杀死所有 mihomo 进程 =====
 
-// ===== 跨平台：杀死进程 =====
-
-#[cfg(unix)]
-fn kill_pid(pid: u32) -> Result<(), String> {
-    let ret = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
-    if ret == 0 {
-        Ok(())
-    } else {
-        Err(format!("停止mihomo进程(PID={pid})失败"))
-    }
+fn mihomo_image_name(mihomo_path: &str) -> String {
+    std::path::Path::new(mihomo_path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| mihomo_path.to_string())
 }
 
 #[cfg(windows)]
-fn kill_pid(pid: u32) -> Result<(), String> {
-    let status = Command::new("taskkill")
-        .args(["/F", "/T", "/PID", &pid.to_string()])
+fn kill_all_mihomo(image_name: &str) -> Result<(), String> {
+    let output = Command::new("taskkill")
+        .args(["/F", "/T", "/IM", image_name])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .output()
         .map_err(|e| format!("执行taskkill失败: {e}"))?;
-    if status.status.success() {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+    if combined.to_lowercase().contains("not found") {
+        return Err("未找到 mihomo 进程".to_string());
+    }
+    if output.status.success() {
         Ok(())
     } else {
-        let stderr = String::from_utf8_lossy(&status.stderr);
-        Err(format!("停止mihomo进程(PID={pid})失败: {stderr}"))
+        Err(format!("停止mihomo进程({image_name})失败: {combined}"))
+    }
+}
+
+#[cfg(unix)]
+fn kill_all_mihomo(_image_name: &str) -> Result<(), String> {
+    let mut killed = 0u32;
+    for entry in fs::read_dir("/proc")
+        .map_err(|e| format!("读取/proc失败: {e}"))?
+        .flatten()
+    {
+        let pid: u32 = match entry.file_name().to_string_lossy().parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let comm = match fs::read_to_string(entry.path().join("comm")) {
+            Ok(c) => c.trim().to_string(),
+            Err(_) => continue,
+        };
+        if comm != "mihomo" {
+            continue;
+        }
+        if unsafe { libc::kill(pid as i32, libc::SIGTERM) } == 0 {
+            killed += 1;
+        }
+    }
+    if killed == 0 {
+        Err("未找到 mihomo 进程".to_string())
+    } else {
+        Ok(())
     }
 }
 
